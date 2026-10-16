@@ -48,6 +48,22 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-volume"))
+                {
+                    double previous = VolumeSlider.Value;
+                    VolumeSlider.ApplyTemplate();
+                    UpdateLayout();
+                    var track = (System.Windows.Controls.Primitives.Track)VolumeSlider.Template.FindName("PART_Track", VolumeSlider);
+                    foreach (double fraction in new[] { 0.0, .12, .25, .43, .5, .72, .88, 1.0, .31 })
+                    {
+                        UpdateVolumePointer(7 + fraction * (VolumeSlider.ActualWidth - 14));
+                        CheckInteraction(Math.Abs(VolumeSlider.Value - fraction) < .001 && Math.Abs(player.Volume - fraction) < .001 && Math.Abs(track.Value - fraction) < .001, "Volume pointer, audio output and thumb must match");
+                    }
+                    UpdateVolumePointer(-100); CheckInteraction(VolumeSlider.Value == 0, "Volume lower bound failed");
+                    UpdateVolumePointer(10000); CheckInteraction(VolumeSlider.Value == 1, "Volume upper bound failed");
+                    VolumeSlider.Value = previous;
+                    await File.WriteAllTextAsync(Path.Combine(directory, "volume-check.txt"), "PASS nine arbitrary pointer positions match slider, audio-engine volume and visual track; both out-of-bounds positions clamp correctly.");
+                }
                 if (args.Contains("--check-mini-player")) await VerifyMiniPlayer(directory);
                 if (args.Contains("--check-track-menu"))
                 {

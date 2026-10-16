@@ -4,9 +4,9 @@ A standalone Windows player for public SoundCloud tracks, built with C# and WPF.
 
 ## Download and install
 
-Get the latest files from [GitHub Releases](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.2.0-alpha).
+Get the latest files from [GitHub Releases](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.2.1-alpha).
 
-- **DIPlayer-Setup-0.2.0-alpha-x64.exe**: Windows installer for the current user, with Start menu and optional desktop shortcuts. Administrator access and a separate .NET installation are not needed.
+- **DIPlayer-Setup-0.2.1-alpha-x64.exe**: Windows installer for the current user, with Start menu and optional desktop shortcuts. Administrator access and a separate .NET installation are not needed.
 - **DIPlayer-win-x64.zip**: portable build. Extract the entire archive and run `DIPlayer.exe`; keep its companion files beside it.
 
 Tested on Windows 11 x64. This alpha is unsigned, so Windows may show an unknown-publisher warning. ARM64 and a separate 32-bit Windows installation have not been tested. Uninstalling the application preserves playlists, custom covers and settings in `%LOCALAPPDATA%\DIPlayer`.

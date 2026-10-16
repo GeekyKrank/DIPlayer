@@ -9,4 +9,4 @@ if(!$Compiler){throw 'Install Inno Setup 6 or 7, or pass -Compiler with the path
 if(!(Test-Path (Join-Path $root 'dist/DIPlayer-win-x64/DIPlayer.exe'))){throw 'Run tools/Build.ps1 first.'}
 & $Compiler /Q (Join-Path $root 'installer/DIPlayer.iss')
 if($LASTEXITCODE -ne 0){throw 'Installer compilation failed.'}
-Get-FileHash (Join-Path $root 'dist/DIPlayer-Setup-0.2.0-alpha-x64.exe') -Algorithm SHA256
+Get-FileHash (Join-Path $root 'dist/DIPlayer-Setup-0.2.1-alpha-x64.exe') -Algorithm SHA256

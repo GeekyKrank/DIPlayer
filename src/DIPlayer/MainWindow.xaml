@@ -49,18 +49,16 @@
    <Setter Property="Width" Value="36"/><Setter Property="Height" Value="26"/><Setter Property="Margin" Value="0"/>
    <Setter Property="FontSize" Value="10"/><Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
   </Style>
-  <Style x:Key="ThinSlider" TargetType="Slider">
-   <Setter Property="MinHeight" Value="20"/><Setter Property="VerticalAlignment" Value="Center"/>
-   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
-    <Grid Background="Transparent" Margin="0,6">
-     <Border Background="#454545" Height="2" VerticalAlignment="Center"/>
-     <Track x:Name="PART_Track">
-      <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="#DADADA" Height="2" VerticalAlignment="Center"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
-      <Track.Thumb><Thumb Width="8" Height="8"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="White"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
-      <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
-     </Track>
-    </Grid>
-   </ControlTemplate></Setter.Value></Setter>
+  <Style x:Key="VolumeControl" TargetType="Slider">
+   <Setter Property="MinHeight" Value="28"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider"><Grid Background="Transparent">
+    <Border Background="#454545" Height="4" Margin="7,0" CornerRadius="2" VerticalAlignment="Center"/>
+    <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+     <Track.DecreaseRepeatButton><RepeatButton Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"><Border Background="#DADADA" Height="4" CornerRadius="2" VerticalAlignment="Center"/></Grid></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+     <Track.Thumb><Thumb Width="14" Height="28"><Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="Transparent"><Ellipse Width="10" Height="10" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+     <Track.IncreaseRepeatButton><RepeatButton Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+    </Track>
+   </Grid></ControlTemplate></Setter.Value></Setter>
   </Style>
  </Window.Resources>
  <Border x:Name="WindowFrame" CornerRadius="24" BorderBrush="#202020" BorderThickness="1"><Grid>
@@ -170,7 +168,7 @@
      <StackPanel x:Name="PlayerExtras" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
       <Button Style="{StaticResource IconButton}" Content="&#xE72C;" Click="RetryTrack" ToolTip="Retry connection"/>
       <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" Foreground="#B7B7B7" VerticalAlignment="Center" Margin="5,0"/>
-      <Slider x:Name="VolumeSlider" Style="{StaticResource ThinSlider}" Width="66" Minimum="0" Maximum="1" Value="0.6" ValueChanged="VolumeChanged" AutomationProperties.Name="Volume"/>
+      <Slider x:Name="VolumeSlider" Style="{StaticResource VolumeControl}" Width="76" SmallChange="0.01" LargeChange="0.05" PreviewMouseLeftButtonDown="VolumePointerDown" PreviewMouseMove="VolumePointerMove" PreviewMouseLeftButtonUp="VolumePointerUp" LostMouseCapture="VolumeCaptureLost" Minimum="0" Maximum="1" Value="0.6" ValueChanged="VolumeChanged" AutomationProperties.Name="Volume"/>
       <Button x:Name="QueueToggle" Style="{StaticResource IconButton}" Content="&#xE142;" Click="ToggleQueue" ToolTip="Queue" AutomationProperties.Name="Open / close queue"/>
      </StackPanel>
     </Grid>

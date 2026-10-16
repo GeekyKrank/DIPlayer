@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><Version>0.2.0-alpha</Version><AssemblyVersion>0.2.0.0</AssemblyVersion><FileVersion>0.2.0.0</FileVersion><Product>DIPlayer</Product></PropertyGroup>
+ <PropertyGroup><Version>0.2.1-alpha</Version><AssemblyVersion>0.2.1.0</AssemblyVersion><FileVersion>0.2.1.0</FileVersion><Product>DIPlayer</Product></PropertyGroup>
  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>disable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>DIPlayer</AssemblyName><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/diplayer.ico</ApplicationIcon></PropertyGroup>
  <ItemGroup><ProjectReference Include="../DIPlayer.Audio/DIPlayer.Audio.csproj"/><PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13"/><PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5"/></ItemGroup>
  <ItemGroup><Resource Include="Assets/soundcloud-white.png"/><Resource Include="Assets/wallpaper.jpg"/><Resource Include="Assets/bulldog-logo.png"/><Resource Include="Assets/diplayer.ico"/></ItemGroup>
