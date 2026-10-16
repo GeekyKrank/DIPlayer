@@ -6,7 +6,9 @@
 
 **Your SoundCloud tracks. Your playlists. Your desktop.**
 
-A standalone Windows player with a dark interface, local playlists and a compact mini player.
+**A SoundCloud player for gamers, designed to keep resource use low while you play.**
+
+A standalone Windows app with a dark interface, local playlists and a compact mini player.
 
 [![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.2.1-alpha/DIPlayer-Setup-0.2.1-alpha-x64.exe) [![Version](https://img.shields.io/badge/RELEASE-0.2.1_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.2.1-alpha)
 
