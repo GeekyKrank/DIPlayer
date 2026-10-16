@@ -1,0 +1,38 @@
+{
+  "source": "evidence/redesign-0.1.1/app-selftest.json",
+  "utc": "2026-10-16T18:38:56.1972575+03:00",
+  "seconds": 90.7772303,
+  "samples": 90,
+  "workingSetMiB": {
+    "mean": 157.17621527777777,
+    "min": 152.3984375,
+    "max": 161.6875
+  },
+  "privateMiB": {
+    "mean": 100.97964409722222,
+    "min": 97.12890625,
+    "max": 105.41796875
+  },
+  "cpuMachinePercent": 0.2911775510343055,
+  "cpuOneCorePercent": 3.494130612411666,
+  "logicalProcessors": 12,
+  "pcmBufferMaxSeconds": 3.9997959,
+  "firstPosition": 5.550839030612304,
+  "lastPosition": 143.63764172857242,
+  "longestStationarySampleStreak": 2,
+  "checks": [
+    "Official search returned 25 tracks",
+    "Track: Dâu Hào Môn Lofi; duration ms=244062",
+    "Real MP3 HLS playback advances",
+    "Tray registered=True",
+    "Narrow list width=354; item width=335",
+    "Duration width=23,84; x=302,15999999999997",
+    "1001-track library scrolling and last page checked; virtualized=True",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Native tray double-click callback restored window",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ]
+}

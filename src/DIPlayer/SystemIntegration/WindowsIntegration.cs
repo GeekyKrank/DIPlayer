@@ -28,7 +28,8 @@ public sealed class WindowsIntegration : IDisposable
             registered.Add(700 + i);
         void Show()
         {
-            window.Dispatcher.Invoke(() => { window.Show(); window.WindowState = System.Windows.WindowState.Normal; window.Activate(); });
+            // Normalize before Show: IsVisibleChanged must not hide a still-minimized window again.
+            window.Dispatcher.Invoke(() => { window.WindowState = System.Windows.WindowState.Normal; window.Show(); window.Activate(); });
         }
         showWindow = Show;
         tray = new NativeTray(source, Show, () => command(0), () => command(1), exit);

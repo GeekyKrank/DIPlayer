@@ -7,3 +7,4 @@
 *.csproj text eol=lf
 *.md text eol=lf
 *.png binary
+*.jpg binary

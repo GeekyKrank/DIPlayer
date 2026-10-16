@@ -23,6 +23,19 @@ public partial class MainWindow
         int seconds = index >= 0 ? int.Parse(args[index + 1]) : 90;
         try
         {
+            if (!args.Contains("--no-capture"))
+            {
+                SetView("home");
+                UpdateLayout();
+                Capture(Path.Combine(directory, "home.png"));
+                Width = 460;
+                Height = 680;
+                await Task.Delay(200);
+                UpdateLayout();
+                Capture(Path.Combine(directory, "home-narrow.png"));
+                Width = 1200;
+                Height = 780;
+            }
             int queryIndex = Array.IndexOf(args, "--query");
             string testQuery = queryIndex >= 0 ? args[queryIndex + 1] : "ambient";
             var found = await Catalog().Search(testQuery, null, default);
@@ -41,7 +54,7 @@ public partial class MainWindow
             await Play(playable);
             await Task.Delay(3500);
             if (!player.Playing || player.Position < .2)
-                throw new Exception("Playback did not advance");
+                throw new Exception("Playback did not advance: " + latestStatus);
             checks.Add("Real MP3 HLS playback advances");
             checks.Add("Tray registered=" + windows?.TrayAvailable);
             if (!args.Contains("--no-capture"))
@@ -53,8 +66,20 @@ public partial class MainWindow
                 await Task.Delay(300);
                 UpdateLayout();
                 Capture(Path.Combine(directory, "narrow.png"));
-                Width = 940;
-                Height = 710;
+                if (Tracks.ItemContainerGenerator.ContainerFromIndex(0) is System.Windows.FrameworkElement item)
+                {
+                    checks.Add($"Narrow list width={Tracks.ActualWidth}; item width={item.ActualWidth}");
+                    void Inspect(System.Windows.DependencyObject node)
+                    {
+                        if (node is System.Windows.Controls.TextBlock text && text.Text == found.Tracks[0].Duration)
+                            checks.Add($"Duration width={text.ActualWidth}; x={text.TranslatePoint(new Point(0, 0), Tracks).X}");
+                        for (int child = 0; child < VisualTreeHelper.GetChildrenCount(node); child++)
+                            Inspect(VisualTreeHelper.GetChild(node, child));
+                    }
+                    Inspect(item);
+                }
+                Width = 1200;
+                Height = 780;
             }
             if (args.Contains("--library-test"))
             {
@@ -117,9 +142,13 @@ public partial class MainWindow
                 }
                 if (i == 20 && args.Contains("--tray-test"))
                 {
+                    // Exercise restoration from the minimized state, including IsVisibleChanged.
+                    WindowState = WindowState.Minimized;
                     PostMessage(new WindowInteropHelper(this).Handle, 0x802B, (IntPtr)1, (IntPtr)0x203);
-                    await Task.Delay(100);
-                    if (!IsVisible)
+                    for (int wait = 0; wait < 20 && !IsVisible; wait++)
+                        await Task.Delay(100);
+                    await Task.Delay(300);
+                    if (!IsVisible || WindowState != WindowState.Normal || !timer.IsEnabled)
                         throw new Exception("Native tray callback did not restore window");
                     hidden = false;
                     checks.Add("Native tray double-click callback restored window");

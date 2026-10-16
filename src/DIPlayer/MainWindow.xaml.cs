@@ -31,11 +31,11 @@ public partial class MainWindow : Window
     readonly Dictionary<string, Track> metadata = [];
     readonly System.Collections.Generic.Queue<string> metadataOrder = new();
     readonly List<string?> cursors = [null];
-    string view = "search", query = "", latestStatus = "";
+    string view = "home", query = "", latestStatus = "";
     int page, searchGeneration, playGeneration;
     string? next, playlistId;
     Track? current;
-    bool quitting, dragging, refreshing;
+    bool quitting, dragging, refreshing, startupInitialized;
     public MainWindow()
     {
         InitializeComponent();
@@ -48,6 +48,10 @@ public partial class MainWindow : Window
         player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && generation == playGeneration) await Guard(() => Advance(1)); }); };
         Loaded += async (_, _) =>
         {
+            // Loaded can fire again after a hidden WPF window is attached to its presentation source.
+            if (startupInitialized)
+                return;
+            startupInitialized = true;
             string[] args = Environment.GetCommandLineArgs();
             int ci = Array.IndexOf(args, "--credentials");
             if (ci >= 0 && ci + 1 < args.Length)
@@ -207,6 +211,12 @@ public partial class MainWindow : Window
     void SetView(string value)
     {
         view = value;
+        HomePanel.Visibility = value == "home" ? Visibility.Visible : Visibility.Collapsed;
+        ContentPanel.Visibility = value == "home" ? Visibility.Collapsed : Visibility.Visible;
+        HomeNav.Tag = value == "home" ? "active" : null;
+        SearchNav.Tag = value == "search" ? "active" : null;
+        LibraryNav.Tag = value == "library" ? "active" : null;
+        QueueNav.Tag = value == "queue" ? "active" : null;
         LibraryBar.Visibility = value == "library" ? Visibility.Visible : Visibility.Collapsed;
         RemoveButton.Visibility = UpButton.Visibility = DownButton.Visibility = value != "search" ? Visibility.Visible : Visibility.Collapsed;
         if (value != "search")
@@ -283,6 +293,8 @@ public partial class MainWindow : Window
     async void SearchView(object s, RoutedEventArgs e)
     {
         SetView("search");
+        SearchBox.Focus();
+        Heading.Text = "Поиск треков";
         page = 0;
         cursors.Clear();
         cursors.Add(null);
@@ -478,6 +490,7 @@ public partial class MainWindow : Window
     void MoveUp(object s, RoutedEventArgs e) => Move(-1); void MoveDown(object s, RoutedEventArgs e) => Move(1);
     void RefreshPosition()
     {
+        PlayPause.Content = player.Playing && !player.Paused ? "\uE769" : "\uE768";
         if (dragging)
             return;
         PositionSlider.Maximum = Math.Max(1, player.Duration);
@@ -490,7 +503,37 @@ public partial class MainWindow : Window
         {
             NowTitle.Text = current.Title;
             NowArtist.Text = current.Artist;
+            if (NowArtwork.Url != current.Artwork)
+                NowArtwork.Url = current.Artwork;
         }
+    }
+    void HomeView(object s, RoutedEventArgs e) => SetView("home");
+    void MinimizeClick(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    void MaximizeClick(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    void CloseClick(object s, RoutedEventArgs e) => Close();
+    bool? compactLayout;
+    void LayoutChanged(object s, SizeChangedEventArgs e)
+    {
+        if (PlayerLayout == null)
+            return;
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        bool compact = ActualWidth < 820;
+        if (compactLayout == compact)
+            return;
+        compactLayout = compact;
+        PlayerRow.Height = new GridLength(compact ? 140 : 100);
+        CompactControlsRow.Height = new GridLength(compact ? 48 : 0);
+        TrackColumn.Width = compact ? new GridLength(142) : new GridLength(1, GridUnitType.Star);
+        ControlsColumn.Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(160);
+        ExtrasColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        Grid.SetColumnSpan(TrackInfo, compact ? 2 : 1);
+        Grid.SetRow(Transport, compact ? 1 : 0);
+        Grid.SetColumn(Transport, compact ? 0 : 1);
+        Grid.SetRow(PlayerExtras, compact ? 1 : 0);
+        Grid.SetColumn(PlayerExtras, compact ? 1 : 2);
+        SourceButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        ContentPanel.Margin = compact ? new Thickness(10, 6, 10, 10) : new Thickness(20, 6, 20, 16);
+        ContentPanel.Padding = new Thickness(compact ? 10 : 16);
     }
     static string Format(double seconds) => TimeSpan.FromSeconds(Math.Max(0, seconds)).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
     void SeekStarted(object s, MouseButtonEventArgs e) => dragging = true;
