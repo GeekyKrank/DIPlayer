@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://api.soundcloud.com/tracks?q=ambient&limit=1",
+    "status": 401,
+    "body": "{\"code\":401,\"message\":\"\",\"link\":\"https://developers.soundcloud.com/docs/api/explorer/open-api\",\"status\":\"401 - Unauthorized\",\"errors\":[],\"error\":null}",
+    "observedAt": "2026-10-16T08:15:58.5820991+00:00"
+  },
+  {
+    "url": "https://api.soundcloud.com/resolve?url=https%3A%2F%2Fsoundcloud.com%2F",
+    "status": 429,
+    "body": "{\n    \"error\": \"Rate Limit Exceeded\"\n}",
+    "observedAt": "2026-10-16T08:15:58.7023994+00:00"
+  }
+]

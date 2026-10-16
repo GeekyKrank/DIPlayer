@@ -1,0 +1,189 @@
+{
+  "utc": "2026-10-16T14:19:58.953853+00:00",
+  "track": "red weather [prod. onda andar]",
+  "trackId": "2191976987",
+  "duration": 104.07004800000003,
+  "seconds": 25.0785746,
+  "cpuSeconds": 0.484375,
+  "cpuOneCorePercent": 1.931429509326469,
+  "cpuMachinePercent": 0.16095245846874637,
+  "logicalProcessors": 12,
+  "failed": false,
+  "samples": [
+    {
+      "second": 1,
+      "workingSetMiB": 68.1875,
+      "privateMiB": 28.296875,
+      "position": 34.05015880113379,
+      "buffer": 3.9052607
+    },
+    {
+      "second": 2,
+      "workingSetMiB": 67.640625,
+      "privateMiB": 27.71484375,
+      "position": 35.02530616031748,
+      "buffer": 3.9750113
+    },
+    {
+      "second": 3,
+      "workingSetMiB": 67.6015625,
+      "privateMiB": 27.7109375,
+      "position": 36.00045352562361,
+      "buffer": 3.8880272
+    },
+    {
+      "second": 4,
+      "workingSetMiB": 67.9296875,
+      "privateMiB": 27.7109375,
+      "position": 37.05061233378689,
+      "buffer": 3.9088888
+    },
+    {
+      "second": 5,
+      "workingSetMiB": 67.9296875,
+      "privateMiB": 27.7109375,
+      "position": 38.025759692970574,
+      "buffer": 3.9786394
+    },
+    {
+      "second": 6,
+      "workingSetMiB": 67.9296875,
+      "privateMiB": 27.7109375,
+      "position": 39.000907054195075,
+      "buffer": 3.9961451
+    },
+    {
+      "second": 7,
+      "workingSetMiB": 67.9296875,
+      "privateMiB": 27.7109375,
+      "position": 40.05106576643998,
+      "buffer": 3.912517
+    },
+    {
+      "second": 8,
+      "workingSetMiB": 67.93359375,
+      "privateMiB": 27.7109375,
+      "position": 41.02621322562367,
+      "buffer": 3.9822675
+    },
+    {
+      "second": 9,
+      "workingSetMiB": 60.484375,
+      "privateMiB": 21.61328125,
+      "position": 42.07637188684817,
+      "buffer": 3.9247619
+    },
+    {
+      "second": 10,
+      "workingSetMiB": 60.28125,
+      "privateMiB": 20.05859375,
+      "position": 43.05151934603186,
+      "buffer": 3.9945124
+    },
+    {
+      "second": 11,
+      "workingSetMiB": 60.953125,
+      "privateMiB": 20.89453125,
+      "position": 44.02666675827677,
+      "buffer": 3.9858956
+    },
+    {
+      "second": 12,
+      "workingSetMiB": 61.07421875,
+      "privateMiB": 20.78125,
+      "position": 45.076825417460455,
+      "buffer": 3.9806349
+    },
+    {
+      "second": 13,
+      "workingSetMiB": 61.88671875,
+      "privateMiB": 21.36328125,
+      "position": 46.05197287868496,
+      "buffer": 3.9981405
+    },
+    {
+      "second": 14,
+      "workingSetMiB": 61.90234375,
+      "privateMiB": 21.36328125,
+      "position": 47.027120190929864,
+      "buffer": 3.9895238
+    },
+    {
+      "second": 15,
+      "workingSetMiB": 61.8984375,
+      "privateMiB": 21.203125,
+      "position": 48.07727900317477,
+      "buffer": 3.9058956
+    },
+    {
+      "second": 16,
+      "workingSetMiB": 61.890625,
+      "privateMiB": 22.05859375,
+      "position": 52.035024000000014,
+      "buffer": 0
+    },
+    {
+      "second": 17,
+      "workingSetMiB": 62.76953125,
+      "privateMiB": 22.8125,
+      "position": 52.93516011065761,
+      "buffer": 3.9848072
+    },
+    {
+      "second": 18,
+      "workingSetMiB": 62.76953125,
+      "privateMiB": 22.8125,
+      "position": 53.91030752290252,
+      "buffer": 3.9761904
+    },
+    {
+      "second": 19,
+      "workingSetMiB": 62.76953125,
+      "privateMiB": 22.8125,
+      "position": 54.96046618412702,
+      "buffer": 3.9186848
+    },
+    {
+      "second": 20,
+      "workingSetMiB": 67.12109375,
+      "privateMiB": 27.11328125,
+      "position": 55.93561359637193,
+      "buffer": 3.910068
+    },
+    {
+      "second": 21,
+      "workingSetMiB": 67.1875,
+      "privateMiB": 27.11328125,
+      "position": 56.91076105555562,
+      "buffer": 3.9798185
+    },
+    {
+      "second": 22,
+      "workingSetMiB": 67.19140625,
+      "privateMiB": 27.11328125,
+      "position": 57.96091971678012,
+      "buffer": 3.9223129
+    },
+    {
+      "second": 23,
+      "workingSetMiB": 67.19140625,
+      "privateMiB": 27.11328125,
+      "position": 58.93606717596381,
+      "buffer": 3.9920634
+    },
+    {
+      "second": 24,
+      "workingSetMiB": 67.19140625,
+      "privateMiB": 27.11328125,
+      "position": 59.911214488208714,
+      "buffer": 3.9834467
+    },
+    {
+      "second": 25,
+      "workingSetMiB": 61.84375,
+      "privateMiB": 21.6953125,
+      "position": 60.9613732473924,
+      "buffer": 3.9781859
+    }
+  ]
+}

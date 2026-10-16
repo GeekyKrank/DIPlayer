@@ -1,0 +1,33 @@
+{
+  "source": "evidence/x86/app-selftest.json",
+  "utc": "2026-10-16T17:43:48.3657008+03:00",
+  "seconds": 91.0180971,
+  "samples": 90,
+  "workingSetMiB": {
+    "mean": 131.83836805555555,
+    "min": 128.94140625,
+    "max": 136.76171875
+  },
+  "privateMiB": {
+    "mean": 60.180729166666666,
+    "min": 57.39453125,
+    "max": 65.15625
+  },
+  "cpuMachinePercent": 0.1773914620282057,
+  "cpuOneCorePercent": 2.128697546677231,
+  "logicalProcessors": 12,
+  "pcmBufferMaxSeconds": 3.9999092,
+  "firstPosition": 4.402902575510248,
+  "lastPosition": 31.05469388367383,
+  "longestStationarySampleStreak": 2,
+  "checks": [
+    "Official search returned 24 tracks",
+    "Track: red weather [prod. onda andar]; duration ms=104046",
+    "Real MP3 HLS playback advances",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ]
+}

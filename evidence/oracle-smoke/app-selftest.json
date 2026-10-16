@@ -1,0 +1,301 @@
+{
+  "utc": "2026-10-16T14:57:32.5278964+00:00",
+  "seconds": 35.2124645,
+  "cpuSeconds": 2.359375,
+  "cpuOneCorePercent": 6.700397222408568,
+  "cpuMachinePercent": 0.5583664352007139,
+  "logicalProcessors": 12,
+  "checks": [
+    "Official search returned 24 tracks",
+    "Track: red weather [prod. onda andar]; duration ms=104046",
+    "Real MP3 HLS playback advances",
+    "1001-track library scrolling and last page checked; virtualized=True",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ],
+  "samples": [
+    {
+      "second": 1,
+      "hidden": false,
+      "workingSetMiB": 288.99609375,
+      "privateMiB": 68.57421875,
+      "position": 5.475827730612304,
+      "pcmBufferedSeconds": 3.9804988
+    },
+    {
+      "second": 2,
+      "hidden": false,
+      "workingSetMiB": 290.18359375,
+      "privateMiB": 68.6953125,
+      "position": 6.525986491836806,
+      "pcmBufferedSeconds": 3.9229931
+    },
+    {
+      "second": 3,
+      "hidden": false,
+      "workingSetMiB": 292.0234375,
+      "privateMiB": 68.6953125,
+      "position": 7.501133851020491,
+      "pcmBufferedSeconds": 3.9927437
+    },
+    {
+      "second": 4,
+      "hidden": false,
+      "workingSetMiB": 291.9921875,
+      "privateMiB": 68.6953125,
+      "position": 8.4762812632654,
+      "pcmBufferedSeconds": 3.9841269
+    },
+    {
+      "second": 5,
+      "hidden": false,
+      "workingSetMiB": 291.95703125,
+      "privateMiB": 68.6953125,
+      "position": 9.526439922449086,
+      "pcmBufferedSeconds": 3.9788662
+    },
+    {
+      "second": 6,
+      "hidden": false,
+      "workingSetMiB": 293.4375,
+      "privateMiB": 70.90234375,
+      "position": 52.93516011065761,
+      "pcmBufferedSeconds": 3.9848072
+    },
+    {
+      "second": 7,
+      "hidden": false,
+      "workingSetMiB": 289.58984375,
+      "privateMiB": 67.15625,
+      "position": 53.91030752290252,
+      "pcmBufferedSeconds": 3.9761904
+    },
+    {
+      "second": 8,
+      "hidden": false,
+      "workingSetMiB": 290.640625,
+      "privateMiB": 67.15625,
+      "position": 54.9604662310658,
+      "pcmBufferedSeconds": 3.9970521
+    },
+    {
+      "second": 9,
+      "hidden": false,
+      "workingSetMiB": 290.91015625,
+      "privateMiB": 67.875,
+      "position": 55.93561364331071,
+      "pcmBufferedSeconds": 3.9884353
+    },
+    {
+      "second": 10,
+      "hidden": false,
+      "workingSetMiB": 291.23828125,
+      "privateMiB": 67.87890625,
+      "position": 56.91076105555562,
+      "pcmBufferedSeconds": 3.9798185
+    },
+    {
+      "second": 11,
+      "hidden": false,
+      "workingSetMiB": 288.515625,
+      "privateMiB": 66.140625,
+      "position": 56.91076105555562,
+      "pcmBufferedSeconds": 3.9798185
+    },
+    {
+      "second": 12,
+      "hidden": false,
+      "workingSetMiB": 289.6796875,
+      "privateMiB": 66.140625,
+      "position": 56.91076105555562,
+      "pcmBufferedSeconds": 3.9798185
+    },
+    {
+      "second": 13,
+      "hidden": false,
+      "workingSetMiB": 289.6875,
+      "privateMiB": 66.14453125,
+      "position": 57.960919714739305,
+      "pcmBufferedSeconds": 3.9745578
+    },
+    {
+      "second": 14,
+      "hidden": false,
+      "workingSetMiB": 289.73046875,
+      "privateMiB": 66.20703125,
+      "position": 58.93606717596381,
+      "pcmBufferedSeconds": 3.9920634
+    },
+    {
+      "second": 15,
+      "hidden": false,
+      "workingSetMiB": 288.15625,
+      "privateMiB": 65.4375,
+      "position": 59.986225888208715,
+      "pcmBufferedSeconds": 3.9084353
+    },
+    {
+      "second": 16,
+      "hidden": true,
+      "workingSetMiB": 289.67578125,
+      "privateMiB": 66.171875,
+      "position": 60.9613732473924,
+      "pcmBufferedSeconds": 3.9781859
+    },
+    {
+      "second": 17,
+      "hidden": true,
+      "workingSetMiB": 289.7578125,
+      "privateMiB": 66.171875,
+      "position": 62.0115320086169,
+      "pcmBufferedSeconds": 3.9206802
+    },
+    {
+      "second": 18,
+      "hidden": true,
+      "workingSetMiB": 289.796875,
+      "privateMiB": 66.234375,
+      "position": 62.98667936780059,
+      "pcmBufferedSeconds": 3.9904308
+    },
+    {
+      "second": 19,
+      "hidden": true,
+      "workingSetMiB": 289.82421875,
+      "privateMiB": 66.234375,
+      "position": 63.9618267800455,
+      "pcmBufferedSeconds": 3.981814
+    },
+    {
+      "second": 20,
+      "hidden": true,
+      "workingSetMiB": 289.8359375,
+      "privateMiB": 66.296875,
+      "position": 65.01198554127001,
+      "pcmBufferedSeconds": 3.9243083
+    },
+    {
+      "second": 21,
+      "hidden": true,
+      "workingSetMiB": 290.11328125,
+      "privateMiB": 66.94921875,
+      "position": 65.98713290045369,
+      "pcmBufferedSeconds": 3.9940589
+    },
+    {
+      "second": 22,
+      "hidden": true,
+      "workingSetMiB": 290.42578125,
+      "privateMiB": 66.94921875,
+      "position": 66.9622803126986,
+      "pcmBufferedSeconds": 3.9854421
+    },
+    {
+      "second": 23,
+      "hidden": true,
+      "workingSetMiB": 290.60546875,
+      "privateMiB": 67.01171875,
+      "position": 68.01243897188228,
+      "pcmBufferedSeconds": 3.9801814
+    },
+    {
+      "second": 24,
+      "hidden": true,
+      "workingSetMiB": 290.56640625,
+      "privateMiB": 66.92578125,
+      "position": 68.98758643310678,
+      "pcmBufferedSeconds": 3.997687
+    },
+    {
+      "second": 25,
+      "hidden": true,
+      "workingSetMiB": 290.59765625,
+      "privateMiB": 66.98828125,
+      "position": 70.03774514535169,
+      "pcmBufferedSeconds": 3.9140589
+    },
+    {
+      "second": 26,
+      "hidden": true,
+      "workingSetMiB": 290.51171875,
+      "privateMiB": 66.98828125,
+      "position": 71.01289250453537,
+      "pcmBufferedSeconds": 3.9838095
+    },
+    {
+      "second": 27,
+      "hidden": true,
+      "workingSetMiB": 289.2265625,
+      "privateMiB": 66.40234375,
+      "position": 72.0630512167803,
+      "pcmBufferedSeconds": 3.9001814
+    },
+    {
+      "second": 28,
+      "hidden": true,
+      "workingSetMiB": 289.59765625,
+      "privateMiB": 66.40234375,
+      "position": 73.03819867800479,
+      "pcmBufferedSeconds": 3.917687
+    },
+    {
+      "second": 29,
+      "hidden": true,
+      "workingSetMiB": 289.6171875,
+      "privateMiB": 66.40234375,
+      "position": 74.01334603718848,
+      "pcmBufferedSeconds": 3.9874376
+    },
+    {
+      "second": 30,
+      "hidden": true,
+      "workingSetMiB": 289.65625,
+      "privateMiB": 66.46875,
+      "position": 75.06350474943339,
+      "pcmBufferedSeconds": 3.9038095
+    },
+    {
+      "second": 31,
+      "hidden": false,
+      "workingSetMiB": 292.1875,
+      "privateMiB": 69.08984375,
+      "position": 76.03865215759666,
+      "pcmBufferedSeconds": 3.9996825
+    },
+    {
+      "second": 32,
+      "hidden": false,
+      "workingSetMiB": 292.22265625,
+      "privateMiB": 69.08984375,
+      "position": 77.08881091678035,
+      "pcmBufferedSeconds": 3.9944217
+    },
+    {
+      "second": 33,
+      "hidden": false,
+      "workingSetMiB": 292.265625,
+      "privateMiB": 69.15234375,
+      "position": 78.06395832902525,
+      "pcmBufferedSeconds": 3.9858049
+    },
+    {
+      "second": 34,
+      "hidden": false,
+      "workingSetMiB": 292.29296875,
+      "privateMiB": 69.15234375,
+      "position": 79.11411704127016,
+      "pcmBufferedSeconds": 3.9021768
+    },
+    {
+      "second": 35,
+      "hidden": false,
+      "workingSetMiB": 292.36328125,
+      "privateMiB": 69.62890625,
+      "position": 80.08926440045386,
+      "pcmBufferedSeconds": 3.9719274
+    }
+  ]
+}

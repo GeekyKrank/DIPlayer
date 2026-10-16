@@ -1,0 +1,33 @@
+{
+  "source": "evidence/x86-long/app-selftest.json",
+  "utc": "2026-10-16T18:05:52.4997035+03:00",
+  "seconds": 1205.5744416,
+  "samples": 1200,
+  "workingSetMiB": {
+    "max": 136.28125,
+    "mean": 132.11984700520833,
+    "min": 128.203125
+  },
+  "privateMiB": {
+    "max": 67.03125,
+    "mean": 61.880045572916664,
+    "min": 59.80859375
+  },
+  "cpuMachinePercent": 0.11729366938873671,
+  "cpuOneCorePercent": 1.4075240327815917,
+  "logicalProcessors": 12,
+  "pcmBufferMaxSeconds": 3.9999773,
+  "firstPosition": 4.1778685306122885,
+  "lastPosition": 1258.3061224826308,
+  "longestStationarySampleStreak": 2,
+  "checks": [
+    "Official search returned 25 tracks",
+    "Track: Twilight Ambient Mix 🌆; duration ms=3670543",
+    "Real MP3 HLS playback advances",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ]
+}

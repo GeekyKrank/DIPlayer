@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-16T14:52:25.6308216+00:00",
+  "checks": [
+    "Health endpoint",
+    "Paged search through server",
+    "Public playlist resolution through server",
+    "Direct signed CDN stream URL",
+    "Reject cursor outside official API",
+    "Reject non-SoundCloud import URL",
+    "Server budget rejects excess requests with HTTP 429"
+  ]
+}

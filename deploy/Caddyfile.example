@@ -1,0 +1,7 @@
+# Replace with a real domain pointing to your Oracle VM. No TLS bypasses.
+music.example.com {
+    reverse_proxy 127.0.0.1:5080
+    request_body {
+        max_size 1KB
+    }
+}

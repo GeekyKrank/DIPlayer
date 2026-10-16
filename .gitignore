@@ -1,0 +1,27 @@
+# Build output
+bin/
+obj/
+dist/
+.vs/
+
+# Local configuration and credentials
+clientAPI.txt
+.tools/
+private/
+evidence/*error.txt
+evidence/**/selftest-progress.txt
+evidence/selftest-progress.txt
+.env
+.env.*
+!.env.example
+secrets/
+*.pfx
+*.p12
+*.pem
+*.key
+appsettings.Local.json
+
+# User and diagnostic data
+*.user
+*.suo
+*.log

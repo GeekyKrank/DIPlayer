@@ -1,0 +1,35 @@
+{
+  "source": "evidence/final-smoke/app-selftest.json",
+  "utc": "2026-10-16T18:05:22.7207678+03:00",
+  "seconds": 90.9068737,
+  "samples": 90,
+  "workingSetMiB": {
+    "mean": 242.923828125,
+    "max": 249.93359375,
+    "min": 231.30078125
+  },
+  "privateMiB": {
+    "mean": 61.20603298611111,
+    "max": 65.59765625,
+    "min": 56.83203125
+  },
+  "cpuMachinePercent": 0.283600666509775,
+  "cpuOneCorePercent": 3.4032079981172996,
+  "logicalProcessors": 12,
+  "pcmBufferMaxSeconds": 3.9997732,
+  "firstPosition": 4.4029025224490255,
+  "lastPosition": 31.054693881633018,
+  "longestStationarySampleStreak": 2,
+  "checks": [
+    "Official search returned 24 tracks",
+    "Track: red weather [prod. onda andar]; duration ms=104046",
+    "Real MP3 HLS playback advances",
+    "Tray registered=True",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Native tray double-click callback restored window",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ]
+}

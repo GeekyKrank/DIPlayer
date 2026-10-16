@@ -1,0 +1,33 @@
+{
+  "source": "evidence/app-selftest.json",
+  "utc": "2026-10-16T18:13:31.7371267+03:00",
+  "seconds": 3611.0422511,
+  "samples": 3600,
+  "workingSetMiB": {
+    "mean": 166.88527886284723,
+    "max": 179.5625,
+    "min": 157.36328125
+  },
+  "privateMiB": {
+    "mean": 92.28353298611111,
+    "max": 104.16015625,
+    "min": 90.0390625
+  },
+  "cpuMachinePercent": 0.09681675003492964,
+  "cpuOneCorePercent": 1.1618010004191557,
+  "logicalProcessors": 12,
+  "pcmBufferMaxSeconds": 3.9999773,
+  "firstPosition": 4.500680318367394,
+  "lastPosition": 3663.4696598766936,
+  "longestStationarySampleStreak": 2,
+  "checks": [
+    "Official search returned 25 tracks",
+    "Track: Aphex Twin Ambient Mix; duration ms=8041822",
+    "Real MP3 HLS playback advances",
+    "Seek requested",
+    "Pause/resume OK",
+    "Hidden window; position timer enabled=False",
+    "Restored window",
+    "Hidden UI timer violations=0"
+  ]
+}

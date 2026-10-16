@@ -1,0 +1,26 @@
+[Unit]
+Description=DIPlayer SoundCloud catalogue
+After=network-online.target
+
+[Service]
+User=diplayer
+Group=diplayer
+WorkingDirectory=/opt/diplayer
+EnvironmentFile=/etc/diplayer/secrets.env
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5080
+Environment=DIPLAYER_TOKEN_FILE=/var/lib/diplayer/token.json
+ExecStart=/opt/diplayer/DIPlayer.Server
+Restart=on-failure
+RestartSec=15
+UMask=0077
+StateDirectory=diplayer
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+MemoryMax=160M
+CPUQuota=25%
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
