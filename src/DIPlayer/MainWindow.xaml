@@ -1,12 +1,40 @@
 <Window x:Class="DIPlayer.MainWindow"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:ui="clr-namespace:DIPlayer.UI" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
- Title="DIPlayer" Background="#080808" Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="13"
+ Title="DIPlayer" Icon="Assets/diplayer.ico" Background="#080808" Foreground="#F4F4F4" FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold"
  Width="1200" Height="780" MinWidth="440" MinHeight="560" WindowStyle="None" ResizeMode="CanResize"
- Closing="WindowClosing" StateChanged="VisibilityChanged" IsVisibleChanged="VisiblePropertyChanged"
+ Closing="WindowClosing" StateChanged="WindowStateChanged" IsVisibleChanged="VisiblePropertyChanged"
  SourceInitialized="SourceReady" SizeChanged="LayoutChanged">
- <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="42" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="10" UseAeroCaptionButtons="False"/></shell:WindowChrome.WindowChrome>
+ <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="42" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="24" UseAeroCaptionButtons="False"/></shell:WindowChrome.WindowChrome>
  <Window.Resources>
+  <Style x:Key="SeekSlider" TargetType="Slider">
+   <Setter Property="MinHeight" Value="30"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider"><Grid Background="Transparent">
+    <Border Height="5" CornerRadius="2.5" Background="#454545" Margin="9,0" VerticalAlignment="Center"/>
+    <Track x:Name="PART_Track">
+     <Track.DecreaseRepeatButton><RepeatButton Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Grid Background="Transparent"><Border Height="5" CornerRadius="2.5" Background="#DDDDDD" VerticalAlignment="Center"/></Grid></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+     <Track.Thumb><Thumb Width="18" Height="30"><Thumb.Template><ControlTemplate TargetType="Thumb"><Grid Background="Transparent"><Ellipse Width="14" Height="14" Fill="#FFFFFF" VerticalAlignment="Center" HorizontalAlignment="Center"/></Grid></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+     <Track.IncreaseRepeatButton><RepeatButton Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+    </Track>
+   </Grid></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="TrackContextMenu" TargetType="ContextMenu">
+   <Setter Property="Background" Value="#202020"/><Setter Property="Foreground" Value="#EEEEEE"/><Setter Property="BorderBrush" Value="#404040"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="4"/>
+   <Setter Property="HasDropShadow" Value="False"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></Border></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <Style x:Key="TrackContextMenuItem" TargetType="MenuItem">
+   <Setter Property="Foreground" Value="#EEEEEE"/><Setter Property="Background" Value="Transparent"/><Setter Property="Padding" Value="12,8"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter Property="Background" Value="#383838"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="#777777"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  </Style>
+  <DataTemplate x:Key="PlaylistCover"><Border Background="#252525" CornerRadius="8" ClipToBounds="True"><Grid>
+   <TextBlock Text="♫" FontSize="48" Foreground="#777777" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Cover1}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+   <Grid><Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <ui:Artwork DecodeWidth="128" Url="{Binding Cover1}" Width="Auto" Height="Auto"/><ui:Artwork Grid.Column="1" DecodeWidth="128" Url="{Binding Cover2}" Width="Auto" Height="Auto"/>
+    <ui:Artwork Grid.Row="1" DecodeWidth="128" Url="{Binding Cover3}" Width="Auto" Height="Auto"/><ui:Artwork Grid.Row="1" Grid.Column="1" DecodeWidth="128" Url="{Binding Cover4}" Width="Auto" Height="Auto"/>
+   </Grid>
+   <Border Background="#252525"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding CustomCover}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding CustomCover}" Stretch="UniformToFill"/></Border>
+  </Grid></Border></DataTemplate>
   <Style x:Key="RailButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
    <Setter Property="Width" Value="46"/><Setter Property="Height" Value="44"/><Setter Property="Padding" Value="0"/>
    <Setter Property="Margin" Value="0,3"/><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="#8A8A8A"/>
@@ -18,7 +46,7 @@
    <Setter Property="Padding" Value="0"/><Setter Property="FontFamily" Value="Segoe MDL2 Assets"/><Setter Property="FontSize" Value="15"/>
   </Style>
   <Style x:Key="CaptionButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
-   <Setter Property="Width" Value="36"/><Setter Property="Height" Value="30"/><Setter Property="Margin" Value="0"/>
+   <Setter Property="Width" Value="36"/><Setter Property="Height" Value="26"/><Setter Property="Margin" Value="0"/>
    <Setter Property="FontSize" Value="10"/><Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
   </Style>
   <Style x:Key="ThinSlider" TargetType="Slider">
@@ -35,7 +63,7 @@
    </ControlTemplate></Setter.Value></Setter>
   </Style>
  </Window.Resources>
- <Border BorderBrush="#202020" BorderThickness="1"><Grid>
+ <Border x:Name="WindowFrame" CornerRadius="24" BorderBrush="#202020" BorderThickness="1"><Grid>
   <Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
   <Grid Grid.Column="1">
    <Border IsHitTestVisible="False"><Border.Background><ImageBrush Stretch="UniformToFill" AlignmentX="Right"><ImageBrush.ImageSource><BitmapImage UriSource="Assets/wallpaper.jpg" DecodePixelWidth="736" CacheOption="OnLoad"/></ImageBrush.ImageSource></ImageBrush></Border.Background></Border>
@@ -44,72 +72,123 @@
    <Border IsHitTestVisible="False"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00000000" Offset="0.55"/><GradientStop Color="#FF000000" Offset="0.88"/></LinearGradientBrush></Border.Background></Border>
   </Grid>
   <!-- Static background; no blur, animation or transparent top-level window. -->
-  <Border Background="#080808" BorderBrush="#141414" BorderThickness="0,0,1,0"><DockPanel Margin="8,10">
-   <Button DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" Content="&#xE713;" ToolTip="Настройки подключения" AutomationProperties.Name="Настройки" Click="SettingsClick"/>
-   <StackPanel>
-    <Button Background="Transparent" Width="46" Height="48" Padding="8" Margin="0,0,0,17" ToolTip="DIPlayer · Главная" Click="HomeView"><Path Data="M 2,5 L 15,5 23,13 23,27 15,19 2,19 Z M 8,0 L 8,25 M 2,5 L 15,19 M 15,5 L 2,19" Stroke="#F7F7F7" StrokeThickness="1.8" Stretch="Uniform"/></Button>
-    <Button x:Name="HomeNav" Tag="active" Style="{StaticResource RailButton}" Content="&#xE80F;" ToolTip="Главная" AutomationProperties.Name="Главная" Click="HomeView"/>
-    <Button x:Name="SearchNav" Style="{StaticResource RailButton}" Content="&#xE721;" ToolTip="Поиск" AutomationProperties.Name="Поиск" Click="SearchView"/>
-    <Button x:Name="LibraryNav" Style="{StaticResource RailButton}" Content="&#xE8F1;" ToolTip="Локальные плейлисты" AutomationProperties.Name="Плейлисты" Click="LibraryView"/>
-    <Button x:Name="QueueNav" Style="{StaticResource RailButton}" Content="&#xE142;" ToolTip="Очередь" AutomationProperties.Name="Очередь" Click="QueueView"/>
-    <Button Style="{StaticResource RailButton}" Content="&#xE896;" ToolTip="Импорт публичного плейлиста по ссылке" AutomationProperties.Name="Импорт по ссылке" Click="ImportClick"/>
-   </StackPanel>
-  </DockPanel></Border>
+  <Border Background="#080808" BorderBrush="#141414" BorderThickness="0,0,1,0"><StackPanel Margin="8,10">
+    <Button Background="Transparent" Width="62" Height="68" Padding="0" Margin="-8,-8,-8,7" shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="Home" Click="HomeView"><Image Width="46" Height="58" Stretch="Uniform"><Image.Source><BitmapImage UriSource="Assets/bulldog-logo.png" DecodePixelHeight="128" CacheOption="OnLoad"/></Image.Source></Image></Button>
+    <Button x:Name="HomeNav" Tag="active" Style="{StaticResource RailButton}" Content="&#xE80F;" ToolTip="Library · Home" AutomationProperties.Name="Library" Click="HomeView"/>
+    <Button x:Name="SearchNav" Style="{StaticResource RailButton}" Content="&#xE721;" ToolTip="Search" AutomationProperties.Name="Search" Click="SearchView"/>
+    <Button x:Name="QueueNav" Style="{StaticResource RailButton}" Content="&#xE142;" ToolTip="Queue" AutomationProperties.Name="Queue" Click="QueueView"/>
+    <Button x:Name="ImportNav" Style="{StaticResource RailButton}" Content="&#xE896;" ToolTip="Import a public playlist by URL" AutomationProperties.Name="Import by URL" Click="ImportClick"/>
+  </StackPanel></Border>
   <Grid Grid.Column="1">
    <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="64"/><RowDefinition Height="*"/><RowDefinition x:Name="PlayerRow" Height="100"/></Grid.RowDefinitions>
-   <Grid Margin="15,0,6,0">
-    <TextBlock Text="DIPlayer" FontSize="11" Foreground="#929292" VerticalAlignment="Center" IsHitTestVisible="False"/>
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-     <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Свернуть в трей" Click="MinimizeClick"/>
-     <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Развернуть / восстановить" Click="MaximizeClick"/>
-     <Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;" ToolTip="Закрыть в трей" Click="CloseClick"/>
+   <Grid Margin="15,0,12,0">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <TextBlock x:Name="BrandTitle" Text="DIPlayer" FontWeight="Normal" FontSize="14" LineHeight="22" LineStackingStrategy="BlockLineHeight" Foreground="#EEEEEE" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
+    <StackPanel Grid.Column="1" Margin="0,8,0,8" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+     <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize to tray" Click="MinimizeClick"/>
+     <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize / restore" Click="MaximizeClick"/>
+     <Button Style="{StaticResource CaptionButton}" Content="&#xE8BB;" ToolTip="Close to tray" Click="CloseClick"/>
     </StackPanel>
    </Grid>
-   <Grid Grid.Row="1" Margin="22,6,22,12" MaxWidth="530">
+   <Button x:Name="PlaylistBack" Grid.Row="1" Content="← Back" Click="BackToLibrary" Visibility="Collapsed" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="22,0,0,6" Background="Transparent" Padding="8,7"/>
+   <Grid x:Name="SearchHeader" Grid.Row="1" Margin="22,6,22,12" MaxWidth="530">
     <Border Background="#E2101010" CornerRadius="8" BorderBrush="#363636" BorderThickness="1"/>
     <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" Foreground="#A2A2A2" Margin="15,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-    <TextBox x:Name="SearchBox" Margin="39,1,8,1" MaxLength="200" Background="Transparent" BorderThickness="0" Padding="0,7" ToolTip="Поиск треков SoundCloud" AutomationProperties.Name="Поиск SoundCloud" TextChanged="SearchChanged" KeyDown="SearchKey"/>
-    <TextBlock Text="Поиск треков SoundCloud" Foreground="#929292" IsHitTestVisible="False" Margin="39,0,10,0" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+    <TextBox x:Name="SearchBox" Margin="39,1,8,1" MaxLength="200" Background="Transparent" BorderThickness="0" Padding="0,7" ToolTip="Search SoundCloud tracks" AutomationProperties.Name="Search SoundCloud" TextChanged="SearchChanged" KeyDown="SearchKey"/>
+    <TextBlock Text="Search SoundCloud tracks" Foreground="#929292" IsHitTestVisible="False" Margin="39,0,10,0" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
    </Grid>
-   <Grid Grid.Row="2" x:Name="HomePanel" IsHitTestVisible="False" Margin="30,0,30,28"><StackPanel VerticalAlignment="Bottom"><TextBlock Text="DIPlayer" FontWeight="Light" FontSize="36" Foreground="#EEEEEE"/><TextBlock Text="Твоя музыка. В своём ритме." Foreground="#9F9F9F" FontSize="13" Margin="2,7,0,0"/></StackPanel></Grid>
-   <Border x:Name="ContentPanel" Grid.Row="2" Visibility="Collapsed" Background="#D9080808" CornerRadius="10" Margin="20,6,20,16" Padding="16"><Grid>
+   <Grid Grid.Row="2" x:Name="HomePanel" IsHitTestVisible="False"/>
+   <Grid x:Name="LibraryPanel" Grid.Row="2" Visibility="Collapsed" Margin="24,0,24,16">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <TextBlock Text="Library" FontSize="27" FontWeight="Bold" Margin="0,0,0,12"/>
+    <Grid Grid.Row="1" Margin="0,0,0,14"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <Border Background="#DDDDDD" CornerRadius="14" Padding="16,6" VerticalAlignment="Center"><TextBlock Text="Playlists" Foreground="#111111"/></Border>
+     <Grid Grid.Column="1" Margin="16,0,8,0" MaxWidth="260" HorizontalAlignment="Right" MinWidth="120"><Border Background="#E2101010" CornerRadius="8" BorderBrush="#363636" BorderThickness="1"/><TextBox x:Name="LibraryFilter" Background="Transparent" BorderThickness="0" Margin="1" ToolTip="Search playlists" AutomationProperties.Name="Search playlists" TextChanged="FilterPlaylists"/><TextBlock Text="Search playlists" FontSize="11" Margin="10,0" Foreground="#888888" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=LibraryFilter}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></Grid>
+     <Button Grid.Column="2" Width="40" Height="36" Padding="0" VerticalAlignment="Center" ToolTip="Create playlist" AutomationProperties.Name="Create playlist" Click="CreatePlaylist"><Path Data="M 0,6 L 12,6 M 6,0 L 6,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="12" Height="12" Stretch="Uniform"/></Button>
+    </Grid>
+    <ListBox x:Name="PlaylistCards" Grid.Row="2" Background="Transparent" ScrollViewer.CanContentScroll="False" PreviewMouseUp="OpenPlaylistCard" KeyDown="PlaylistCardKey">
+     <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+     <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Width" Value="192"/><Setter Property="Margin" Value="0,0,16,16"/><Setter Property="Padding" Value="4"/><Setter Property="Cursor" Value="Hand"/></Style></ListBox.ItemContainerStyle>
+     <ListBox.ItemTemplate><DataTemplate><StackPanel><ContentControl Content="{Binding}" ContentTemplate="{StaticResource PlaylistCover}" Width="184" Height="184"/><TextBlock Text="{Binding Name}" FontWeight="Bold" TextTrimming="CharacterEllipsis" Margin="0,10,0,4"/><TextBlock Text="{Binding CountLabel}" Foreground="#999999"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+    <TextBlock x:Name="LibraryEmpty" Grid.Row="2" Text="No playlists yet. Click + or import a public playlist." TextWrapping="Wrap" Foreground="#AAAAAA" Margin="4,20" IsHitTestVisible="False"/>
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right"><Button x:Name="LibraryPrevious" Width="40" Height="36" Padding="0" AutomationProperties.Name="Previous playlist page" Click="PreviousLibraryCards"><Path Data="M 7,0 L 1,6 L 7,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="12" Stretch="Uniform"/></Button><TextBlock x:Name="LibraryPageLabel" VerticalAlignment="Center" Margin="8,0"/><Button x:Name="LibraryNext" Width="40" Height="36" Padding="0" AutomationProperties.Name="Next playlist page" Click="NextLibraryCards"><Path Data="M 1,0 L 7,6 L 1,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="12" Stretch="Uniform"/></Button></StackPanel>
+   </Grid>
+   <Border x:Name="ContentPanel" Grid.Row="2" Visibility="Collapsed" Background="#D9080808" CornerRadius="10" Margin="20,6,20,16" Padding="16"><Grid><Grid.ColumnDefinitions><ColumnDefinition x:Name="PlaylistSummaryColumn" Width="0"/><ColumnDefinition/></Grid.ColumnDefinitions><ScrollViewer x:Name="PlaylistSummary" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,24,0"><StackPanel><ContentControl x:Name="DetailCover" ContentTemplate="{StaticResource PlaylistCover}" Height="230"/><TextBlock x:Name="DetailName" FontSize="24" FontWeight="Bold" TextWrapping="Wrap" Margin="0,18,0,8"/><TextBlock x:Name="DetailCount" Foreground="#AAAAAA" Margin="0,0,0,18"/><Button Content="▶  Play all" Background="#DDDDDD" Foreground="#111111" Click="PlayWholePlaylist"/><Button Content="+ Queue all" Click="EnqueueWholePlaylist"/><StackPanel x:Name="SummaryPlaylistActions" Margin="0,10,0,0"><WrapPanel x:Name="LibraryBar" Visibility="Collapsed" Margin="0,0,0,6"><ComboBox x:Name="PlaylistPicker" Visibility="Collapsed" SelectionChanged="PlaylistSelected"/><Button x:Name="RenamePlaylistButton" Content="Edit" Click="RenamePlaylist"/><Button x:Name="DeletePlaylistButton" Content="Delete" Click="DeletePlaylist"/><Button x:Name="CompactPlayAll" Content="▶ All" Click="PlayWholePlaylist" Visibility="Collapsed"/></WrapPanel></StackPanel></StackPanel></ScrollViewer><Grid x:Name="TrackContent" Grid.Column="1">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <TextBlock x:Name="Heading" Text="Результаты поиска" FontSize="23" FontWeight="SemiBold" Margin="3,0,0,12" TextTrimming="CharacterEllipsis"/>
+    <DockPanel LastChildFill="False"><TextBlock x:Name="Heading" Text="Search results" FontSize="23" FontWeight="Bold" Margin="3,0,0,12" TextTrimming="CharacterEllipsis"/><Button x:Name="ClearQueueButton" Content="Clear" Click="ClearQueue" Visibility="Collapsed" Margin="16,0,0,12" VerticalAlignment="Center" ToolTip="Remove all tracks from the queue"/></DockPanel>
     <StackPanel Grid.Row="1">
-     <WrapPanel x:Name="LibraryBar" Visibility="Collapsed" Margin="0,0,0,6"><ComboBox x:Name="PlaylistPicker" Width="155" Margin="3" SelectionChanged="PlaylistSelected"/><Button Content="Создать" Click="CreatePlaylist"/><Button Content="Имя" Click="RenamePlaylist"/><Button Content="Удалить" Click="DeletePlaylist"/></WrapPanel>
-     <WrapPanel><Button Content="▶ Играть" Click="PlaySelected"/><Button Content="+ В очередь" Click="EnqueueSelected"/><Button Content="+ В плейлист" Click="AddToPlaylist"/><Button x:Name="RemoveButton" Content="Убрать" Click="RemoveSelected" Visibility="Collapsed"/><Button x:Name="UpButton" Content="↑" Click="MoveUp" Visibility="Collapsed"/><Button x:Name="DownButton" Content="↓" Click="MoveDown" Visibility="Collapsed"/></WrapPanel>
+     <StackPanel x:Name="CompactPlaylistActions"/>
+
     </StackPanel>
-    <ListBox Grid.Row="2" x:Name="Tracks" Background="Transparent" MouseDoubleClick="PlaySelected" Margin="0,10,0,6"><ListBox.ItemTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Grid Grid.Row="2" Margin="0,10,0,0" ClipToBounds="True"><ListBox x:Name="Tracks" VirtualizingPanel.ScrollUnit="Pixel" Background="Transparent" PreviewMouseDown="TrackPointerDown" PreviewMouseUp="TrackPointerUp" KeyDown="TrackKeyDown" Margin="0"><ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Cursor" Value="Hand"/><EventSetter Event="ContextMenuOpening" Handler="TrackMenuOpening"/><Setter Property="ContextMenu"><Setter.Value><ContextMenu/></Setter.Value></Setter></Style></ListBox.ItemContainerStyle><ListBox.ItemTemplate><DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions><Button Grid.Column="3" Content="⋮" Style="{StaticResource IconButton}" FontFamily="Segoe UI" FontSize="20" ToolTip="Track actions" AutomationProperties.Name="Track actions" Click="OpenTrackMenu"/>
      <TextBlock Grid.Column="2" Text="{Binding Track.Duration}" Foreground="#999999" Margin="8,0,0,0" VerticalAlignment="Center"/>
      <Border Grid.Column="0" Background="#222222" Margin="0"><ui:Artwork Url="{Binding Track.Artwork}"/></Border>
-     <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"><TextBlock Text="{Binding Track.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Track.Artist}" Foreground="#999999" FontSize="12" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Track.Availability}" Foreground="{StaticResource Accent}" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel>
-    </Grid></DataTemplate></ListBox.ItemTemplate></ListBox>
-    <DockPanel Grid.Row="3"><StackPanel Orientation="Horizontal" DockPanel.Dock="Right"><Button x:Name="PrevPage" Content="‹" Click="PreviousPage"/><TextBlock x:Name="PageLabel" VerticalAlignment="Center" Text="1" Margin="6,0"/><Button x:Name="NextPage" Content="›" Click="FollowingPage"/></StackPanel><TextBlock x:Name="Status" Foreground="#999999" TextWrapping="Wrap" VerticalAlignment="Center" Margin="4" FontSize="11" Text="Публичные треки SoundCloud"/><Button x:Name="CancelImport" Content="Отменить импорт" Visibility="Collapsed" Click="CancelImportClick"/></DockPanel>
-   </Grid></Border>
+     <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center"><TextBlock Text="{Binding Track.Title}" FontWeight="Bold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Track.Artist}" Foreground="#999999" FontSize="12" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Track.Availability}" Foreground="{StaticResource Accent}" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel>
+    </Grid></DataTemplate></ListBox.ItemTemplate></ListBox><Border Height="32" VerticalAlignment="Bottom" Margin="0,0,10,0" IsHitTestVisible="False"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#00080808" Offset="0"/><GradientStop Color="#C0080808" Offset="0.65"/><GradientStop Color="#FF080808" Offset="1"/></LinearGradientBrush></Border.Background></Border></Grid>
+    <Grid Grid.Row="3" Margin="0,0,0,-16"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock x:Name="Status" Foreground="#999999" TextWrapping="Wrap" Margin="4" FontSize="11"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock><StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center"><Button x:Name="PrevPage" Width="40" Height="36" Padding="0" AutomationProperties.Name="Previous page" Click="PreviousPage"><Path Data="M 7,0 L 1,6 L 7,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="12" Stretch="Uniform"/></Button><TextBlock x:Name="PageLabel" FontSize="15" VerticalAlignment="Center" Text="1" Margin="10,0"/><Button x:Name="NextPage" Width="40" Height="36" Padding="0" AutomationProperties.Name="Next page" Click="FollowingPage"><Path Data="M 1,0 L 7,6 L 1,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Width="8" Height="12" Stretch="Uniform"/></Button></StackPanel></Grid>
+   </Grid></Grid></Border>
+   <Border x:Name="ImportPanel" Grid.Row="2" Visibility="Collapsed" Background="#E5080808" CornerRadius="10" Margin="20,6,20,16" Padding="24" MaxWidth="650" VerticalAlignment="Top">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+     <StackPanel>
+      <TextBlock Text="Import playlist" FontSize="24" FontWeight="Bold" Margin="0,0,0,10"/>
+      <TextBlock Text="Create a local copy of a SoundCloud track list. Only public playlists are supported." Foreground="#A5A5A5" TextWrapping="Wrap" Margin="0,0,0,24"/>
+      <TextBlock Text="Playlist URL" FontSize="12" Foreground="#C0C0C0" Margin="0,0,0,8"/>
+      <Grid>
+       <TextBox x:Name="ImportUrl" MaxLength="2048" MinHeight="42" KeyDown="ImportUrlKey" AutomationProperties.Name="Public playlist URL"/>
+       <TextBlock Text="https://soundcloud.com/artist/sets/playlist" Foreground="#858585" IsHitTestVisible="False" Margin="11,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=ImportUrl}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+      </Grid>
+      <WrapPanel Margin="-3,13,0,0">
+       <Button x:Name="ImportStart" Content="Import" Background="#303030" Click="StartImportClick"/>
+       <Button x:Name="ImportCancel" Content="Cancel" Visibility="Collapsed" Click="CancelImportClick"/>
+       <Button x:Name="ImportOpenPlaylist" Content="Open playlist" Visibility="Collapsed" Click="OpenImportedPlaylist"/>
+      </WrapPanel>
+      <StackPanel x:Name="ImportProgressPanel" Visibility="Collapsed" Margin="0,19,0,0">
+       <TextBlock x:Name="ImportProgressText" Foreground="#C0C0C0" Margin="0,0,0,8"/>
+       <ProgressBar x:Name="ImportProgressBar" Height="4" Maximum="1" Foreground="#DDDDDD" Background="#303030" BorderThickness="0"><ProgressBar.Template><ControlTemplate TargetType="ProgressBar"><Border Background="{TemplateBinding Background}" CornerRadius="2"><Grid x:Name="PART_Track" ClipToBounds="True"><Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="2" HorizontalAlignment="Left"/></Grid></Border></ControlTemplate></ProgressBar.Template></ProgressBar>
+       <TextBlock x:Name="ImportUnavailable" Visibility="Collapsed" Foreground="{StaticResource Accent}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"/>
+      </StackPanel>
+      <TextBlock x:Name="ImportMessage" TextWrapping="Wrap" Foreground="#A5A5A5" Margin="0,14,0,0"/>
+     </StackPanel>
+    </ScrollViewer>
+   </Border>
    <Border Grid.Row="3" Background="#F2080808" BorderBrush="#282828" BorderThickness="0,1,0,0"><Grid Margin="16,0,16,8">
-    <Grid.RowDefinitions><RowDefinition Height="21"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions><Slider x:Name="PositionSlider" Style="{StaticResource ThinSlider}" Minimum="0" Maximum="1" PreviewMouseLeftButtonUp="SeekReleased" PreviewMouseLeftButtonDown="SeekStarted" IsMoveToPointEnabled="True" AutomationProperties.Name="Позиция трека"/><TextBlock Grid.Column="1" x:Name="TimeLabel" Text="0:00 / 0:00" FontSize="10" Foreground="#999999" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+    <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions><Slider x:Name="PositionSlider" Style="{StaticResource SeekSlider}" Minimum="0" Maximum="1" PreviewMouseLeftButtonUp="SeekReleased" PreviewMouseLeftButtonDown="SeekStarted" PreviewMouseMove="SeekMoved" LostMouseCapture="SeekCaptureLost" AutomationProperties.Name="Track position"/><TextBlock Grid.Column="1" x:Name="TimeLabel" Text="0:00 / 0:00" FontSize="12" Foreground="#999999" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
     <Grid Grid.Row="1" x:Name="PlayerLayout">
      <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition x:Name="CompactControlsRow" Height="0"/></Grid.RowDefinitions>
      <Grid.ColumnDefinitions><ColumnDefinition x:Name="TrackColumn" Width="*"/><ColumnDefinition x:Name="ControlsColumn" Width="160"/><ColumnDefinition x:Name="ExtrasColumn" Width="*"/></Grid.ColumnDefinitions>
      <Grid x:Name="TrackInfo" Margin="0,0,10,0" VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <Border Width="40" Height="40" Background="#202020" HorizontalAlignment="Left"><Grid><TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" Foreground="#888888" HorizontalAlignment="Center" VerticalAlignment="Center"/><ui:Artwork x:Name="NowArtwork" Width="40" Height="40"/></Grid></Border>
-      <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="NowTitle" Text="DIPlayer" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock x:Name="NowArtist" Text="Выберите трек" Foreground="#929292" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel>
+      <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="NowTitle" Text="DIPlayer" FontWeight="Bold" TextTrimming="CharacterEllipsis" Cursor="Hand" ToolTip="Open current track on SoundCloud" MouseLeftButtonUp="OpenSoundCloud"/><TextBlock x:Name="NowArtist" Text="Choose a track" Foreground="#929292" FontSize="11" TextTrimming="CharacterEllipsis"/></StackPanel>
      </Grid>
      <StackPanel x:Name="Transport" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-      <Button Style="{StaticResource IconButton}" Content="&#xE892;" Click="PreviousTrack" ToolTip="Предыдущий"/>
-      <Button x:Name="PlayPause" Content="&#xE768;" Width="38" Height="38" Margin="6,0" Background="#F5F5F5" Foreground="#080808" Click="ToggleClick" ToolTip="Воспроизведение / пауза" AutomationProperties.Name="Воспроизведение / пауза"><Button.Template><ControlTemplate TargetType="Button"><Grid><Ellipse Fill="{TemplateBinding Background}"/><TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontFamily="Segoe MDL2 Assets" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template></Button>
-      <Button Style="{StaticResource IconButton}" Content="&#xE893;" Click="NextTrack" ToolTip="Следующий"/>
+      <Button Style="{StaticResource IconButton}" Content="&#xE892;" Click="PreviousTrack" ToolTip="Previous"/>
+      <Button x:Name="PlayPause" FocusVisualStyle="{x:Null}" Content="&#xE768;" Width="38" Height="38" Margin="6,0" Background="#F5F5F5" Foreground="#080808" Click="ToggleClick" ToolTip="Play / pause" AutomationProperties.Name="Play / pause"><Button.Template><ControlTemplate TargetType="Button"><Grid><Ellipse Fill="{TemplateBinding Background}"/><TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontFamily="Segoe MDL2 Assets" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Opacity" Value="0.8"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template></Button>
+      <Button Style="{StaticResource IconButton}" Content="&#xE893;" Click="NextTrack" ToolTip="Next"/>
      </StackPanel>
      <StackPanel x:Name="PlayerExtras" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-      <Button Style="{StaticResource IconButton}" Content="&#xE72C;" Click="RetryTrack" ToolTip="Повторить подключение"/>
+      <Button Style="{StaticResource IconButton}" Content="&#xE72C;" Click="RetryTrack" ToolTip="Retry connection"/>
       <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" Foreground="#B7B7B7" VerticalAlignment="Center" Margin="5,0"/>
-      <Slider x:Name="VolumeSlider" Style="{StaticResource ThinSlider}" Width="66" Minimum="0" Maximum="1" Value="0.6" ValueChanged="VolumeChanged" AutomationProperties.Name="Громкость"/>
-      <Button Style="{StaticResource IconButton}" Content="&#xE142;" Click="QueueView" ToolTip="Очередь"/>
-      <Button x:Name="SourceButton" Background="Transparent" Padding="4" Margin="5,0,0,0" Click="OpenSource" ToolTip="Открыть SoundCloud"><Image Source="Assets/soundcloud-white.png" Width="28" Stretch="Uniform"/></Button>
+      <Slider x:Name="VolumeSlider" Style="{StaticResource ThinSlider}" Width="66" Minimum="0" Maximum="1" Value="0.6" ValueChanged="VolumeChanged" AutomationProperties.Name="Volume"/>
+      <Button x:Name="QueueToggle" Style="{StaticResource IconButton}" Content="&#xE142;" Click="ToggleQueue" ToolTip="Queue" AutomationProperties.Name="Open / close queue"/>
      </StackPanel>
     </Grid>
    </Grid></Border>
+   <Grid x:Name="ActionOverlay" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed" Background="#B5080808" MouseLeftButtonDown="ActionBackdropClick" PreviewKeyDown="ActionOverlayKey" KeyboardNavigation.TabNavigation="Cycle">
+    <Border Background="#151515" BorderBrush="#383838" BorderThickness="1" CornerRadius="12" MaxWidth="460" Margin="20" Padding="22" VerticalAlignment="Center">
+     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+      <TextBlock x:Name="ActionHeading" FontSize="23" FontWeight="Bold" TextWrapping="Wrap"/>
+      <TextBlock x:Name="ActionDescription" Foreground="#A5A5A5" TextWrapping="Wrap" Margin="0,10,0,18"/>
+      <TextBlock x:Name="ActionInputLabel" Text="Playlist name" Foreground="#BEBEBE" FontSize="12" Margin="0,0,0,8"/>
+      <TextBox x:Name="ActionName" MaxLength="120" MinHeight="40" KeyDown="ActionInputKey" AutomationProperties.Name="Playlist name"/>
+      <StackPanel x:Name="ActionCoverPanel" Visibility="Collapsed" Margin="0,16,0,0"><TextBlock Text="Cover" Foreground="#BEBEBE" FontSize="12" Margin="0,0,0,8"/><DockPanel><Border Width="76" Height="76" Background="#252525" DockPanel.Dock="Left" Margin="0,0,12,0"><Image x:Name="ActionCoverPreview" Stretch="UniformToFill"/></Border><StackPanel VerticalAlignment="Center"><Button x:Name="ChooseCoverButton" Content="Choose image…" Click="ChoosePlaylistCover"/><Button Content="Restore track artwork" Click="ResetPlaylistCover"/></StackPanel></DockPanel><TextBlock Text="JPG, PNG or BMP · up to 20 MB" Foreground="#888888" FontSize="11" Margin="0,8,0,0"/></StackPanel>
+      <ComboBox x:Name="ActionPicker" MinHeight="40" KeyDown="ActionInputKey" AutomationProperties.Name="Playlist to add the track to"/>
+      <TextBlock x:Name="ActionError" Visibility="Collapsed" Foreground="{StaticResource Accent}" TextWrapping="Wrap" Margin="0,12,0,0"/>
+      <WrapPanel HorizontalAlignment="Right" Margin="0,18,-3,-3"><Button x:Name="ActionCancel" Content="Cancel" Click="CancelAction"/><Button x:Name="ActionConfirm" Content="Save" Background="#353535" Click="ConfirmAction"/></WrapPanel>
+     </StackPanel></ScrollViewer>
+    </Border>
+   </Grid>
   </Grid>
  </Grid></Border>
 </Window>

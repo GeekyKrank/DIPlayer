@@ -7,7 +7,7 @@ public sealed class RemoteCatalog : ICatalog, IDisposable
     public RemoteCatalog(string endpoint)
     {
         var uri = new Uri(endpoint.TrimEnd('/') + "/");
-        if (uri.Scheme != "https" && !(uri.IsLoopback && uri.Scheme == "http")) throw new CatalogException("Для сервера нужен HTTPS.");
+        if (uri.Scheme != "https" && !(uri.IsLoopback && uri.Scheme == "http")) throw new CatalogException("The server requires HTTPS.");
         http = new HttpClient { BaseAddress = uri, Timeout = TimeSpan.FromSeconds(25) };
     }
     async Task<T> Get<T>(string path, CancellationToken ct)
@@ -16,12 +16,21 @@ public sealed class RemoteCatalog : ICatalog, IDisposable
         var bytes = await SoundCloudCatalog.ReadLimited(response.Content, 2*1024*1024, ct);
         if (!response.IsSuccessStatusCode)
         {
-            string message = "Сервер каталога недоступен.";
+            string message = "The catalog server is unavailable.";
             try { using var doc = JsonDocument.Parse(bytes); message = doc.RootElement.GetProperty("message").GetString() ?? message; } catch (JsonException) { }
-            throw new CatalogException(message,(int)response.StatusCode);
+            throw new CatalogException(LegacyCatalogText.Translate(message),(int)response.StatusCode);
         }
-        return (T)JsonSerializer.Deserialize(bytes,typeof(T),CatalogJsonContext.Default)!;
+        object result = JsonSerializer.Deserialize(bytes,typeof(T),CatalogJsonContext.Default)!;
+        result = result switch
+        {
+            Track track => EnglishIssue(track),
+            TrackPage page => page with { Tracks = page.Tracks.Select(EnglishIssue).ToList() },
+            List<Track> tracks => tracks.Select(EnglishIssue).ToList(),
+            _ => result
+        };
+        return (T)result;
     }
+    static Track EnglishIssue(Track track) => track.Issue == null ? track : track with { Issue = LegacyCatalogText.Translate(track.Issue) };
     static string E(string? s) => Uri.EscapeDataString(s ?? "");
     public Task<TrackPage> Search(string q,string? next,CancellationToken ct) => Get<TrackPage>($"search?q={E(q)}&next={E(next)}",ct);
     public Task<PlaylistInfo> ResolvePlaylist(string url,CancellationToken ct) => Get<PlaylistInfo>($"resolve?url={E(url)}",ct);

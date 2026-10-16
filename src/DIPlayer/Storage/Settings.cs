@@ -35,7 +35,7 @@ public sealed class Settings
         string id = Regex.Match(raw, @"(?im)^\s*client\s*id\s*[:=]\s*(\S+)").Groups[1].Value;
         string secret = Regex.Match(raw, @"(?im)^\s*client\s*secret\s*[:=]\s*(\S+)").Groups[1].Value;
         if (id.Length == 0 || secret.Length == 0)
-            throw new CatalogException("В файле нужны строки client id: … и client secret: …");
+            throw new CatalogException("The file must contain client id: … and client secret: …");
         ProtectedCredentials = Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { id, secret })), null, DataProtectionScope.CurrentUser));
         Server = null;
         Save();
@@ -45,7 +45,7 @@ public sealed class Settings
         if (!string.IsNullOrWhiteSpace(Server))
             return new RemoteCatalog(Server);
         if (ProtectedCredentials == null)
-            throw new CatalogException("Укажите сервер каталога в настройках. Для личного тестирования можно импортировать собственные ключи.");
+            throw new CatalogException("Set a catalog server in settings. You can import your own keys for private testing.");
         var data = JsonSerializer.Deserialize<string[]>(ProtectedData.Unprotect(Convert.FromBase64String(ProtectedCredentials), null, DataProtectionScope.CurrentUser))!;
         return new SoundCloudCatalog(data[0], data[1]);
     }

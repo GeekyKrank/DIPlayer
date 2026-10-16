@@ -13,6 +13,7 @@ public sealed class Artwork : System.Windows.Controls.Image
     static readonly Dictionary<string, BitmapSource> cache = [];
     static readonly LinkedList<string> lru = [];
     CancellationTokenSource? cancel;
+    public int DecodeWidth { get; set; } = 64;
     public static readonly DependencyProperty UrlProperty = DependencyProperty.Register(nameof(Url), typeof(string), typeof(Artwork), new PropertyMetadata(null, (o, _) => ((Artwork)o).Load()));
     public string? Url
     {
@@ -20,8 +21,6 @@ public sealed class Artwork : System.Windows.Controls.Image
     }
     public Artwork()
     {
-        Width = 48;
-        Height = 48;
         Stretch = System.Windows.Media.Stretch.UniformToFill;
         Loaded += (_, _) => Load();
         IsVisibleChanged += (_, _) => { if (IsVisible) Load(); else cancel?.Cancel(); };
@@ -35,7 +34,8 @@ public sealed class Artwork : System.Windows.Controls.Image
         Source = null;
         if (!IsLoaded || !IsVisible || string.IsNullOrEmpty(Url))
             return;
-        string url = Url.Replace("-large.", "-t67x67.");
+        int decode = Math.Clamp(DecodeWidth, 32, 128);
+        string url = Url.Replace("-large.", decode > 64 ? "-t200x200." : "-t67x67.");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !uri.Host.EndsWith(".sndcdn.com"))
             return;
         if (cache.TryGetValue(url, out var image))
@@ -63,7 +63,7 @@ public sealed class Artwork : System.Windows.Controls.Image
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = 64;
+            bitmap.DecodePixelWidth = decode;
             bitmap.StreamSource = input;
             bitmap.EndInit();
             bitmap.Freeze();

@@ -58,14 +58,14 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
     }
     public static async Task<byte[]> ReadLimited(HttpContent content, int max, CancellationToken ct)
     {
-        if (content.Headers.ContentLength > max) throw new CatalogException("Ответ превышает допустимый размер.");
+        if (content.Headers.ContentLength > max) throw new CatalogException("The response exceeds the size limit.");
         await using var input = await content.ReadAsStreamAsync(ct);
         using var output = new MemoryStream();
         byte[] buffer = new byte[16384];
         int n;
         while ((n = await input.ReadAsync(buffer, ct)) != 0)
         {
-            if (output.Length + n > max) throw new CatalogException("Ответ превышает допустимый размер.");
+            if (output.Length + n > max) throw new CatalogException("The response exceeds the size limit.");
             output.Write(buffer, 0, n);
         }
         return output.ToArray();
@@ -74,20 +74,20 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
     {
         if ((int)status < 400) return;
         throw new CatalogException((int)status switch {
-            401 => "Авторизация приложения истекла или ключи недействительны.",
-            403 => "Доступ запрещён SoundCloud; точная причина не сообщена.",
-            404 => "Трек или плейлист не найден. Он мог быть удалён или стать приватным.",
-            410 => "Ресурс удалён (HTTP 410 Gone).",
-            429 => "Лимит запросов SoundCloud. Подождите перед повтором.",
-            >=500 => "Сервис SoundCloud временно недоступен.",
-            _ => $"SoundCloud отклонил запрос (HTTP {(int)status})."
+            401 => "App authorization expired or credentials are invalid.",
+            403 => "SoundCloud denied access; no specific reason was provided.",
+            404 => "Track or playlist not found. It may have been removed or made private.",
+            410 => "The resource was removed (HTTP 410 Gone).",
+            429 => "SoundCloud rate limit reached. Wait before retrying.",
+            >=500 => "SoundCloud is temporarily unavailable.",
+            _ => $"SoundCloud rejected the request (HTTP {(int)status})."
         }, (int)status);
     }
     public static string? ExplicitRestriction(string? reason)=>reason?.ToLowerInvariant() switch
     {
-        "geo_blocked" or "geoblocked" or "region_restricted" or "not_available_in_region"=>"Трек недоступен в этом регионе.",
-        "subscription_required" or "payment_required" or "paywall"=>"Для этого трека требуется платный доступ SoundCloud.",
-        "track_deleted" or "deleted"=>"Трек удалён.",
+        "geo_blocked" or "geoblocked" or "region_restricted" or "not_available_in_region"=>"This track is unavailable in your region.",
+        "subscription_required" or "payment_required" or "paywall"=>"This track requires a paid SoundCloud subscription.",
+        "track_deleted" or "deleted"=>"This track has been removed.",
         _=>null
     };
     static async Task EnsureResponse(HttpResponseMessage response,CancellationToken ct)
@@ -106,7 +106,7 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
     static Uri SafeApi(string path)
     {
         var uri = new Uri(Api, path);
-        if (uri.Scheme != "https" || uri.Host != Api.Host || !uri.IsDefaultPort) throw new CatalogException("Небезопасный адрес страницы API.");
+        if (uri.Scheme != "https" || uri.Host != Api.Host || !uri.IsDefaultPort) throw new CatalogException("Unsafe API page URL.");
         return uri;
     }
     async Task<JsonDocument> Json(string path, CancellationToken ct)
@@ -122,32 +122,32 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
             {uri=SafeApi(new Uri(uri,res.Headers.Location).AbsoluteUri);continue;}
             return JsonDocument.Parse(await ReadLimited(res.Content, 2 * 1024 * 1024, ct));
         }
-        throw new CatalogException("Слишком много перенаправлений каталога.");
+        throw new CatalogException("Too many catalog redirects.");
     }
     public async Task<TrackPage> Search(string query, string? next, CancellationToken ct)
     {
-        if(next!=null && SafeApi(next).AbsolutePath!="/tracks")throw new CatalogException("Некорректный курсор поиска.");
+        if(next!=null && SafeApi(next).AbsolutePath!="/tracks")throw new CatalogException("Invalid search cursor.");
         using var json = await Json(next ?? $"/tracks?q={Uri.EscapeDataString(query)}&limit=25&linked_partitioning=true", ct);
         return Page(json.RootElement);
     }
     public static string PublicPlaylistUrl(string text)
     {
         if (!Uri.TryCreate(text, UriKind.Absolute, out var u) || u.Scheme != "https" || u.Host is not ("soundcloud.com" or "www.soundcloud.com") || !u.IsDefaultPort || u.UserInfo.Length != 0)
-            throw new CatalogException("Вставьте https://soundcloud.com/автор/sets/плейлист.");
+            throw new CatalogException("Enter https://soundcloud.com/artist/sets/playlist.");
         var parts = u.AbsolutePath.Trim('/').Split('/');
-        if (parts.Length != 3 || parts[1] != "sets" || u.Query.Contains("secret", StringComparison.OrdinalIgnoreCase)) throw new CatalogException("Поддерживаются только публичные плейлисты /автор/sets/плейлист.");
+        if (parts.Length != 3 || parts[1] != "sets" || u.Query.Contains("secret", StringComparison.OrdinalIgnoreCase)) throw new CatalogException("Only public /artist/sets/playlist URLs are supported.");
         return "https://soundcloud.com" + u.AbsolutePath;
     }
     public async Task<PlaylistInfo> ResolvePlaylist(string url, CancellationToken ct)
     {
         using var json = await Json("/resolve?url=" + Uri.EscapeDataString(PublicPlaylistUrl(url)), ct);
         var r = json.RootElement;
-        if (Text(r,"kind") != "playlist" || Text(r,"sharing") != "public") throw new CatalogException("Ссылка не указывает на публичный плейлист.");
-        return new PlaylistInfo(Id(r), Text(r,"title") ?? "Импорт", Number(r,"track_count"), true);
+        if (Text(r,"kind") != "playlist" || Text(r,"sharing") != "public") throw new CatalogException("The URL does not point to a public playlist.");
+        return new PlaylistInfo(Id(r), Text(r,"title") ?? "Import", Number(r,"track_count"), true);
     }
     public async Task<TrackPage> PlaylistTracks(string id, string? next, CancellationToken ct)
     {
-        if(next!=null && SafeApi(next).AbsolutePath!=$"/playlists/{Uri.EscapeDataString(id)}/tracks")throw new CatalogException("Некорректный курсор плейлиста.");
+        if(next!=null && SafeApi(next).AbsolutePath!=$"/playlists/{Uri.EscapeDataString(id)}/tracks")throw new CatalogException("Invalid playlist cursor.");
         using var json = await Json(next ?? $"/playlists/{Uri.EscapeDataString(id)}/tracks?limit=25&linked_partitioning=true", ct);
         return Page(json.RootElement);
     }
@@ -158,17 +158,17 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
     }
     public async Task<List<Track>> GetTracks(IReadOnlyList<string> ids,CancellationToken ct)
     {
-        if(ids.Count is <1 or >25)throw new CatalogException("Допустимо от 1 до 25 треков на страницу.");
+        if(ids.Count is <1 or >25)throw new CatalogException("A page must contain between 1 and 25 tracks.");
         using var json=await Json("/tracks?ids="+Uri.EscapeDataString(string.Join(",",ids))+"&limit=25&linked_partitioning=true",ct);
         return Page(json.RootElement).Tracks;
     }
     public async Task<string> Stream(string id, CancellationToken ct)
     {
         var track = await GetTrack(id, ct);
-        if (track.Access != "playable") throw new CatalogException(track.Issue ?? (track.Access == "preview" ? "Доступен только фрагмент; полное воспроизведение недоступно." : "Трек недоступен вне SoundCloud; причина не сообщена."));
+        if (track.Access != "playable") throw new CatalogException(track.Issue ?? (track.Access == "preview" ? "Only a preview is available; full playback is unavailable." : "This track is unavailable outside SoundCloud; no reason was provided."));
         using var json = await Json($"/tracks/{Uri.EscapeDataString(id)}/streams", ct);
         var source = Text(json.RootElement,"hls_mp3_128_url");
-        if (source == null) throw new CatalogException("У трека нет поддерживаемого MP3 HLS-потока. AAC пока не поддерживается.");
+        if (source == null) throw new CatalogException("This track has no supported MP3 HLS stream. AAC is not supported yet.");
         var uri = new Uri(source);
         // Stream endpoints are authenticated API redirects. OAuth is NEVER forwarded to a CDN.
         for (int redirect = 0; redirect < 5; redirect++)
@@ -179,14 +179,14 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
             using var res = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             await EnsureResponse(res,ct);
             if ((int)res.StatusCode is >=300 and <400 && res.Headers.Location != null) { uri = new Uri(uri, res.Headers.Location); continue; }
-            throw new CatalogException("Неожиданный ответ при разрешении аудиопотока.");
+            throw new CatalogException("Unexpected response while resolving the audio stream.");
         }
-        throw new CatalogException("Слишком много перенаправлений аудио.");
+        throw new CatalogException("Too many audio redirects.");
     }
     public static void ValidateCdn(Uri uri)
     {
         if (uri.Scheme != "https" || !uri.IsDefaultPort || uri.UserInfo.Length != 0 || !(uri.Host.EndsWith(".sndcdn.com", StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".soundcloud.com", StringComparison.OrdinalIgnoreCase)))
-            throw new CatalogException("Недопустимый адрес аудио CDN.");
+            throw new CatalogException("Invalid audio CDN URL.");
     }
     static string? Text(JsonElement r, string name) => r.TryGetProperty(name,out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
     static int Number(JsonElement r, string name) => r.TryGetProperty(name,out var p) && p.TryGetInt32(out int n) ? n : 0;
@@ -195,8 +195,8 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
     {
         string id = Id(r);
         bool missing = !r.TryGetProperty("title",out _);
-        string artist = r.TryGetProperty("user",out var user) ? Text(user,"username") ?? "Неизвестный автор" : "Неизвестный автор";
-        return new Track(id, Text(r,"title") ?? $"Недоступный трек {id}", Text(r,"metadata_artist") ?? artist, Number(r,"duration"), Text(r,"artwork_url"), Text(r,"permalink_url") ?? "", Text(r,"access") ?? "unknown", missing ? "Метаданные недоступны" : ExplicitRestriction(Text(r,"access_reason")));
+        string artist = r.TryGetProperty("user",out var user) ? Text(user,"username") ?? "Unknown artist" : "Unknown artist";
+        return new Track(id, Text(r,"title") ?? $"Unavailable track {id}", Text(r,"metadata_artist") ?? artist, Number(r,"duration"), Text(r,"artwork_url"), Text(r,"permalink_url") ?? "", Text(r,"access") ?? "unknown", missing ? "Track details unavailable" : ExplicitRestriction(Text(r,"access_reason")));
     }
     static TrackPage Page(JsonElement root)
     {

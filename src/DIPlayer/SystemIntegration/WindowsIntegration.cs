@@ -28,8 +28,7 @@ public sealed class WindowsIntegration : IDisposable
             registered.Add(700 + i);
         void Show()
         {
-            // Normalize before Show: IsVisibleChanged must not hide a still-minimized window again.
-            window.Dispatcher.Invoke(() => { window.WindowState = System.Windows.WindowState.Normal; window.Show(); window.Activate(); });
+            window.Dispatcher.Invoke(() => WindowActivation.Restore(window));
         }
         showWindow = Show;
         tray = new NativeTray(source, Show, () => command(0), () => command(1), exit);
@@ -80,6 +79,7 @@ public sealed class WindowsIntegration : IDisposable
     }
     public bool AllKeysRegistered => registered.Count == 4;
     public bool TrayAvailable => tray.Registered;
+    public bool TrayUsesAppIcon => tray.UsesAppIcon;
     public void Track(string title) => tray.SetTitle("DIPlayer · " + title);
     public void Dispose()
     {

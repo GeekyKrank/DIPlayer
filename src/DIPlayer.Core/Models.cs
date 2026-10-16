@@ -6,14 +6,14 @@ public sealed record Track(string Id, string Title, string Artist, long Duration
 {
     public string Duration => TimeSpan.FromMilliseconds(DurationMs).ToString(DurationMs >= 3600000 ? @"h\:mm\:ss" : @"m\:ss");
     public string Description => $"{Artist}  ·  {Duration}";
-    public string Availability => Issue ?? (Access == "preview" ? "Только фрагмент" : Access == "blocked" ? "Недоступен: причина не сообщена" : "");
+    public string Availability => Issue ?? (Access == "preview" ? "Preview only" : Access == "blocked" ? "Unavailable: no reason provided" : "");
 }
 public sealed record TrackPage(List<Track> Tracks, string? Next);
 public sealed record PlaylistInfo(string Id, string Title, int Count, bool Public);
 public sealed class LocalPlaylist
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "Новый плейлист";
+    public string Name { get; set; } = "New playlist";
     public DateTimeOffset Created { get; set; } = DateTimeOffset.UtcNow;
     public List<Track> Tracks { get; set; } = [];
     public string? Source { get; set; }

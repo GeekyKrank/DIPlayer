@@ -30,7 +30,7 @@ builder.Services.AddRateLimiter(o =>
         PartitionedRateLimiter.Create<HttpContext, string>(_ => RateLimitPartition.GetTokenBucketLimiter("budget", _ => new TokenBucketRateLimiterOptions { TokenLimit = 6, TokensPerPeriod = 2, ReplenishmentPeriod = TimeSpan.FromSeconds(1), AutoReplenishment = true, QueueLimit = 0 })),
         PartitionedRateLimiter.Create<HttpContext, string>(_ => RateLimitPartition.GetFixedWindowLimiter("daily", _ => new FixedWindowRateLimiterOptions { PermitLimit = 3000, Window = TimeSpan.FromDays(1), QueueLimit = 0, AutoReplenishment = true })),
         PartitionedRateLimiter.Create<HttpContext, string>(ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0, AutoReplenishment = true })));
-    o.OnRejected = async (ctx, ct) => { ctx.HttpContext.Response.Headers.RetryAfter = "60"; await ctx.HttpContext.Response.WriteAsJsonAsync(new { message = "Лимит сервера каталога. Повторите через минуту." }, ct); };
+    o.OnRejected = async (ctx, ct) => { ctx.HttpContext.Response.Headers.RetryAfter = "60"; await ctx.HttpContext.Response.WriteAsJsonAsync(new { message = "Catalog server rate limit reached. Retry in a minute." }, ct); };
 });
 var app = builder.Build();
 app.UseForwardedHeaders();
@@ -42,7 +42,7 @@ app.Use(async (ctx, next) =>
         ctx.Response.StatusCode = 400;
         await ctx.Response.WriteAsJsonAsync(new
         {
-            message = "Слишком длинный параметр."
+            message = "Parameter is too long."
         });
         return;
     }
@@ -54,8 +54,8 @@ app.Use(async (ctx, next) =>
         await next();
     }
     catch (CatalogException e) { ctx.Response.StatusCode = e.Status is >= 400 and <= 599 ? e.Status.Value : 400; await ctx.Response.WriteAsJsonAsync(new { message = e.Message }); }
-    catch (OperationCanceledException) { if (!ctx.Response.HasStarted) { ctx.Response.StatusCode = 504; await ctx.Response.WriteAsJsonAsync(new { message = "Сервер не ответил вовремя." }, CancellationToken.None); } }
-    catch (HttpRequestException) { ctx.Response.StatusCode = 502; await ctx.Response.WriteAsJsonAsync(new { message = "Нет связи между сервером каталога и SoundCloud." }); }
+    catch (OperationCanceledException) { if (!ctx.Response.HasStarted) { ctx.Response.StatusCode = 504; await ctx.Response.WriteAsJsonAsync(new { message = "The server timed out." }, CancellationToken.None); } }
+    catch (HttpRequestException) { ctx.Response.StatusCode = 502; await ctx.Response.WriteAsJsonAsync(new { message = "The catalog server cannot reach SoundCloud." }); }
 });
 app.UseRateLimiter();
 static string? Next(string? next) => string.IsNullOrEmpty(next) ? null : next;
@@ -63,7 +63,7 @@ app.MapGet("/health", () => new { service = "DIPlayer catalogue", status = "ok" 
 app.MapGet("/search", async (string q, string? next, SoundCloudCatalog api, CancellationToken ct) =>
 {
     if (q.Length is < 1 or > 200)
-        throw new CatalogException("Поиск: от 1 до 200 символов.");
+        throw new CatalogException("Search: enter between 1 and 200 characters.");
     return await api.Search(q, Next(next), ct);
 });
 app.MapGet("/resolve", async (string url, SoundCloudCatalog api, CancellationToken ct) => await api.ResolvePlaylist(url, ct));

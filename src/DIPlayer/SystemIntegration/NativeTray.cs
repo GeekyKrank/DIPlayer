@@ -24,6 +24,8 @@ public sealed class NativeTray : IDisposable
     }
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool Shell_NotifyIcon(uint message, ref IconData data);
     [DllImport("user32.dll")] static extern IntPtr LoadIcon(IntPtr instance, IntPtr icon);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern uint ExtractIconEx(string file, int index, out IntPtr large, out IntPtr small, uint count);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessage(string name);
     [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool AppendMenu(IntPtr menu, uint flags, UIntPtr id, string text);
@@ -36,11 +38,13 @@ public sealed class NativeTray : IDisposable
     readonly Action open, toggle, next, exit;
     readonly uint explorerCreated;
     IconData data;
+    IntPtr ownedIcon;
     bool disposed;
     public bool Registered
     {
         get; private set;
     }
+    public bool UsesAppIcon => ownedIcon != IntPtr.Zero;
     public NativeTray(HwndSource source, Action open, Action toggle, Action next, Action exit)
     {
         this.source = source;
@@ -48,7 +52,10 @@ public sealed class NativeTray : IDisposable
         this.toggle = toggle;
         this.next = next;
         this.exit = exit;
-        data = new IconData { Size = (uint)Marshal.SizeOf<IconData>(), Window = source.Handle, Id = 1, Flags = 7, CallbackMessage = Callback, Icon = LoadIcon(IntPtr.Zero, (IntPtr)32512), Tip = "DIPlayer", Info = "", InfoTitle = "" };
+        ExtractIconEx(Path.Combine(AppContext.BaseDirectory, "DIPlayer.exe"), 0, out var large, out var small, 1);
+        ownedIcon = small != IntPtr.Zero ? small : large;
+        if (large != IntPtr.Zero && large != ownedIcon) DestroyIcon(large);
+        data = new IconData { Size = (uint)Marshal.SizeOf<IconData>(), Window = source.Handle, Id = 1, Flags = 7, CallbackMessage = Callback, Icon = ownedIcon != IntPtr.Zero ? ownedIcon : LoadIcon(IntPtr.Zero, (IntPtr)32512), Tip = "DIPlayer", Info = "", InfoTitle = "" };
         explorerCreated = RegisterWindowMessage("TaskbarCreated");
         source.AddHook(Hook);
         Registered = Shell_NotifyIcon(0, ref data);
@@ -82,10 +89,10 @@ public sealed class NativeTray : IDisposable
         IntPtr menu = CreatePopupMenu();
         try
         {
-            AppendMenu(menu, 0, (UIntPtr)1, "Открыть DIPlayer");
-            AppendMenu(menu, 0, (UIntPtr)2, "Воспроизведение / пауза");
-            AppendMenu(menu, 0, (UIntPtr)3, "Следующий");
-            AppendMenu(menu, 0, (UIntPtr)4, "Выход");
+            AppendMenu(menu, 0, (UIntPtr)1, "Open DIPlayer");
+            AppendMenu(menu, 0, (UIntPtr)2, "Play / pause");
+            AppendMenu(menu, 0, (UIntPtr)3, "Next");
+            AppendMenu(menu, 0, (UIntPtr)4, "Quit");
             GetCursorPos(out var point);
             SetForegroundWindow(source.Handle);
             uint selected = TrackPopupMenuEx(menu, 0x102, point.X, point.Y, source.Handle, IntPtr.Zero);
@@ -107,6 +114,7 @@ public sealed class NativeTray : IDisposable
             return;
         disposed = true;
         Shell_NotifyIcon(2, ref data);
+        if (ownedIcon != IntPtr.Zero) { DestroyIcon(ownedIcon); ownedIcon = IntPtr.Zero; }
         source.RemoveHook(Hook);
     }
 }

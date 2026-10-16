@@ -16,7 +16,7 @@ namespace DIPlayer;
 public sealed record DisplayRow(Track Track, long EntryId = 0, int QueueIndex = -1);
 public partial class MainWindow : Window
 {
-    readonly LibraryStore store = new();
+    readonly LibraryStore store = new(DiagnosticLibraryDirectory());
     readonly Settings settings = Settings.Load();
     readonly PlaybackQueue queue = new();
     readonly HlsPlayer player = new();
@@ -39,6 +39,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        string localFonts = Path.Combine(LibraryStore.DataDirectory, "fonts");
+        if (File.Exists(Path.Combine(localFonts, "DirtyStains-DEMO.otf")))
+            BrandTitle.FontFamily = new System.Windows.Media.FontFamily(new Uri(localFonts + Path.DirectorySeparatorChar), "./#Dirty Stains");
+        WindowFrame.SizeChanged += (_, _) => UpdateWindowCorners();
+        DpiChanged += (_, _) => Dispatcher.BeginInvoke(UpdateWindowCorners);
         Tracks.ItemsSource = rows;
         queue.Tracks.AddRange(store.LoadQueue());
         VolumeSlider.Value = settings.Volume;
@@ -66,6 +71,7 @@ public partial class MainWindow : Window
                 serverOverride = args[si + 1];
             Connect();
             RefreshPlaylists();
+            if (!args.Contains("--selftest")) LibraryView(this, new RoutedEventArgs());
             int qi = Array.IndexOf(args, "--search");
             if (qi >= 0 && qi + 1 < args.Length)
                 SearchBox.Text = args[qi + 1];
@@ -81,13 +87,14 @@ public partial class MainWindow : Window
         try
         {
             catalog = serverOverride != null ? new RemoteCatalog(serverOverride) : settings.CreateCatalog();
-            SetStatus(serverOverride != null || settings.Server != null ? "Подключён сервер каталога" : "Личное тестирование • собственные ключи защищены Windows DPAPI");
+            SetStatus(serverOverride != null || settings.Server != null ? "Catalog server connected" : "Private testing • your keys are protected by Windows DPAPI");
         }
-        catch (Exception e) { SetStatus(e is CatalogException ? e.Message : "Не удалось прочитать настройки подключения."); }
+        catch (Exception e) { SetStatus(e is CatalogException ? e.Message : "Could not read connection settings."); }
     }
-    ICatalog Catalog() => catalog ?? throw new CatalogException("Откройте ⚙ и настройте сервер или импортируйте собственные ключи для теста.");
+    ICatalog Catalog() => catalog ?? throw new CatalogException("Could not initialize the catalog. Restart the application.");
     void SetStatus(string message)
     {
+        if (message == "Catalog server connected") message = "";
         latestStatus = message;
         if (IsVisible && WindowState != WindowState.Minimized)
             Status.Text = message;
@@ -98,28 +105,34 @@ public partial class MainWindow : Window
         {
             await work();
         }
-        catch (OperationCanceledException e) when (e.InnerException is TimeoutException) { SetStatus("Сервер не ответил вовремя. Проверьте сеть и повторите."); }
+        catch (OperationCanceledException e) when (e.InnerException is TimeoutException) { SetStatus("The server timed out. Check your network and try again."); }
         catch (OperationCanceledException) { }
-        catch (Exception e) { SetStatus(e switch { CatalogException => e.Message, HttpRequestException => "Нет связи. Проверьте подключение к сети.", _ => "Не удалось выполнить действие. Попробуйте ещё раз." }); }
+        catch (Exception e) { SetStatus(e switch { CatalogException => e.Message, HttpRequestException => "No connection. Check your network.", _ => "Could not complete the action. Please try again." }); }
     }
     void SourceReady(object? sender, EventArgs e)
     {
-        windows = new WindowsIntegration(this, id => Dispatcher.BeginInvoke(async () => { if (id == 0) await Guard(TogglePlayback); else if (id == 1) await Advance(1); else if (id == 2) await Advance(-1); else await player.Stop(); }), () => Dispatcher.BeginInvoke(Exit), () => { playCancel?.Cancel(); player.Pause(); SetStatus("Windows переходит в сон. После пробуждения нажмите «Повторить». "); }, () => SetStatus("Windows возобновила работу. Нажмите «Повторить» для обновления потока."), async () => { if (quitting || current == null) return; bool paused = player.Paused; double position = player.Position; await Guard(() => Play(current, position)); if (paused) player.Pause(); });
+        UpdateWindowCorners();
+        windows = new WindowsIntegration(this, id => Dispatcher.BeginInvoke(async () => { if (id == 0) await Guard(TogglePlayback); else if (id == 1) await Advance(1); else if (id == 2) await Advance(-1); else await player.Stop(); }), () => Dispatcher.BeginInvoke(Exit), () => { playCancel?.Cancel(); player.Pause(); SetStatus("Windows is going to sleep. Press Retry after waking. "); }, () => SetStatus("Windows has resumed. Press Retry to reconnect the stream."), async () => { if (quitting || current == null) return; bool paused = player.Paused; double position = player.Position; await Guard(() => Play(current, position)); if (paused) player.Pause(); });
         if (!windows.AllKeysRegistered)
-            SetStatus("Часть медиаклавиш занята другой программой; управление в окне доступно.");
+            SetStatus("Some media keys are used by another app. Use the player controls.");
         if (!windows.TrayAvailable)
-            SetStatus("Windows не добавила значок в трей; закрытие окна завершит приложение.");
+            SetStatus("The tray icon is unavailable. Closing the window will quit the app.");
     }
     void VisibilityChanged(object? sender, EventArgs e)
     {
         if (timer == null || Status == null)
             return;
+        UpdateWindowCorners();
         if (IsVisible && WindowState != WindowState.Minimized)
         {
+            miniPlayer?.Hide();
             timer.Start();
             Status.Text = latestStatus;
             RefreshCurrent();
             RefreshPosition();
+            SyncImportView();
+            RefreshImportedLibrary();
+            if (view == "library" && libraryOverview) ShowLibraryOverview();
             if (rows.Any(r => r.Track.Access == "unknown"))
                 _ = HydrateRows();
         }
@@ -128,10 +141,9 @@ public partial class MainWindow : Window
             timer.Stop();
             searchCancel?.Cancel();
             metadataCancel?.Cancel();
+            coverCancel?.Cancel();
             searchGeneration++;
         }
-        if (WindowState == WindowState.Minimized && windows?.TrayAvailable != false)
-            Hide();
     }
     void VisiblePropertyChanged(object sender, DependencyPropertyChangedEventArgs e) => VisibilityChanged(sender, EventArgs.Empty);
     void WindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -150,11 +162,13 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        miniPlayer?.Close();
         timer.Stop();
         searchCancel?.Cancel();
         metadataCancel?.Cancel();
         playCancel?.Cancel();
         importCancel?.Cancel();
+        coverCancel?.Cancel();
         windows?.Dispose();
         if (importing != null)
             await importing;
@@ -197,33 +211,44 @@ public partial class MainWindow : Window
     {
         if (query.Length == 0)
             return;
-        SetStatus("Поиск…");
+        SetStatus("Searching…");
         var result = await Catalog().Search(query, cursors[page], ct);
         ct.ThrowIfCancellationRequested();
         if (generation != searchGeneration || view != "search")
             return;
         ShowRows(result.Tracks.Select(t => new DisplayRow(t)));
         next = result.Next;
-        Heading.Text = "Результаты поиска";
-        SetStatus(result.Tracks.Count == 0 ? "Ничего не найдено" : "Выберите трек • доступ проверяется перед воспроизведением");
+        Heading.Text = "Search results";
+        SetStatus(result.Tracks.Count == 0 ? "No results found" : "");
         Paging();
     }
     void SetView(string value)
     {
+        CloseActionPanel(false);
+        if (view == "queue" && value != "queue") queueReturnView = null;
         view = value;
         HomePanel.Visibility = value == "home" ? Visibility.Visible : Visibility.Collapsed;
-        ContentPanel.Visibility = value == "home" ? Visibility.Collapsed : Visibility.Visible;
-        HomeNav.Tag = value == "home" ? "active" : null;
+        ContentPanel.Visibility = value is "search" or "library" or "queue" ? Visibility.Visible : Visibility.Collapsed;
+        LibraryPanel.Visibility = Visibility.Collapsed;
+        if (value != "library") { coverCancel?.Cancel(); PlaylistSummary.Visibility = Visibility.Collapsed; PlaylistSummaryColumn.Width = new GridLength(0); }
+        ImportPanel.Visibility = value == "import" ? Visibility.Visible : Visibility.Collapsed;
+        HomeNav.Tag = value is "home" or "library" ? "active" : null;
         SearchNav.Tag = value == "search" ? "active" : null;
-        LibraryNav.Tag = value == "library" ? "active" : null;
         QueueNav.Tag = value == "queue" ? "active" : null;
+        QueueToggle.Background = value == "queue" ? System.Windows.Media.Brushes.DimGray : System.Windows.Media.Brushes.Transparent;
+        QueueToggle.ToolTip = value == "queue" ? "Close queue" : "Queue";
+        ClearQueueButton.Visibility = value == "queue" ? Visibility.Visible : Visibility.Collapsed;
+        ImportNav.Tag = value == "import" ? "active" : null;
         LibraryBar.Visibility = value == "library" ? Visibility.Visible : Visibility.Collapsed;
-        RemoveButton.Visibility = UpButton.Visibility = DownButton.Visibility = value != "search" ? Visibility.Visible : Visibility.Collapsed;
+
+        if (value == "import") SyncImportView();
         if (value != "search")
         {
             searchCancel?.Cancel();
             searchGeneration++;
         }
+        if (value is "home" or "import") metadataCancel?.Cancel();
+        UpdatePlaylistLayout();
     }
     void ShowRows(IEnumerable<DisplayRow> data)
     {
@@ -270,7 +295,7 @@ public partial class MainWindow : Window
                 var track = metadata.GetValueOrDefault(row.Track.Id) ?? row.Track with
                 {
                     Artist = "",
-                    Issue = "API не вернул трек. Возможно, он удалён или недоступен."
+                    Issue = "The API did not return this track. It may have been removed or become unavailable."
                 };
                 rows[i] = row with
                 {
@@ -280,9 +305,10 @@ public partial class MainWindow : Window
                     queue.Tracks[row.QueueIndex] = track;
             }
             Tracks.SelectedIndex = selected;
+            if (view == "library" && !libraryOverview) UpdatePlaylistSummary(store.Playlists().FirstOrDefault(p => p.Id == playlistId));
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (!quitting) SetStatus(e is CatalogException ? e.Message : "Не удалось обновить метаданные. Проверьте сеть и откройте список ещё раз."); }
+        catch (Exception e) { if (!quitting) SetStatus(e is CatalogException ? e.Message : "Could not refresh track details. Check your network and reopen the list."); }
     }
     void Paging()
     {
@@ -294,7 +320,7 @@ public partial class MainWindow : Window
     {
         SetView("search");
         SearchBox.Focus();
-        Heading.Text = "Поиск треков";
+        Heading.Text = "Search tracks";
         page = 0;
         cursors.Clear();
         cursors.Add(null);
@@ -303,23 +329,36 @@ public partial class MainWindow : Window
     }
     void QueueView(object s, RoutedEventArgs e)
     {
+        if (view == "queue") return;
+        queueReturnView = CaptureView();
         SetView("queue");
         page = 0;
         ShowQueue();
     }
     void ShowQueue()
     {
-        Heading.Text = $"Очередь · {queue.Tracks.Count}";
+        ClearQueueButton.IsEnabled = queue.Tracks.Count > 0;
+        Heading.Text = $"Queue · {queue.Tracks.Count}";
         ShowRows(queue.Tracks.Skip(page * 25).Take(25).Select((t, i) => new DisplayRow(t, 0, page * 25 + i)));
         next = (page + 1) * 25 < queue.Tracks.Count ? "more" : null;
         Paging();
     }
+    async void ClearQueue(object sender, RoutedEventArgs e) => await Guard(() =>
+    {
+        store.SaveQueue(Array.Empty<Track>());
+        queue.Tracks.Clear();
+        queue.Index = -1;
+        page = 0;
+        ShowQueue();
+        SetStatus("");
+        return Task.CompletedTask;
+    });
     void LibraryView(object s, RoutedEventArgs e)
     {
         SetView("library");
         page = 0;
         RefreshPlaylists();
-        ShowLibrary();
+        ShowLibraryOverview();
     }
     void RefreshPlaylists(string? select = null)
     {
@@ -329,6 +368,7 @@ public partial class MainWindow : Window
         playlistId = select ?? playlistId;
         PlaylistPicker.SelectedItem = data.FirstOrDefault(p => p.Id == playlistId) ?? data.FirstOrDefault();
         playlistId = (PlaylistPicker.SelectedItem as PlaylistHeader)?.Id;
+        RenamePlaylistButton.IsEnabled = DeletePlaylistButton.IsEnabled = playlistId != null;
         refreshing = false;
     }
     void PlaylistSelected(object s, SelectionChangedEventArgs e)
@@ -336,14 +376,21 @@ public partial class MainWindow : Window
         if (refreshing)
             return;
         playlistId = (PlaylistPicker.SelectedItem as PlaylistHeader)?.Id;
+        RenamePlaylistButton.IsEnabled = DeletePlaylistButton.IsEnabled = playlistId != null;
         page = 0;
         if (view == "library")
             ShowLibrary();
     }
     void ShowLibrary()
     {
+        libraryOverview = false;
+        coverCancel?.Cancel();
+        LibraryPanel.Visibility = Visibility.Collapsed;
+        ContentPanel.Visibility = Visibility.Visible;
+        UpdatePlaylistLayout();
         var header = store.Playlists().FirstOrDefault(p => p.Id == playlistId);
-        Heading.Text = header == null ? "Локальные плейлисты" : header.Name + (header.Complete ? "" : " · импорт не завершён");
+        UpdatePlaylistSummary(header);
+        Heading.Text = header == null ? "Local playlists" : header.Name + (header.Complete ? "" : " · import incomplete");
         if (header == null)
         {
             rows.Clear();
@@ -409,7 +456,39 @@ public partial class MainWindow : Window
     {
         if (Selected is not { } row)
             return;
-        await Guard(async () => { if (row.QueueIndex >= 0) queue.Index = row.QueueIndex; else { queue.Add(row.Track); queue.Index = queue.Tracks.Count - 1; store.SaveQueue(queue.Tracks); } await Play(row.Track); });
+        await Guard(() => PlayRow(row));
+    }
+    async Task PlayRow(DisplayRow row)
+    {
+        if (row.QueueIndex >= 0) queue.Index = row.QueueIndex;
+        else SeedPlaybackQueue(row);
+        if (current?.Id == row.Track.Id && player.Duration > 0 && !player.Faulted)
+        {
+            if (player.Paused) player.Toggle();
+            if (player.Playing) { RefreshPosition(); return; }
+        }
+        await Play(row.Track);
+    }
+    void SeedPlaybackQueue(DisplayRow selected)
+    {
+        var context = rows.ToList();
+        if (view == "library" && playlistId != null && selected.EntryId > 0)
+        {
+            // Read references in pages, retaining at most the existing 1,000-track queue limit.
+            int firstPage = page / 40 * 40;
+            context.Clear();
+            for (int index = firstPage; index < firstPage + 40; index++)
+            {
+                var entries = store.Page(playlistId, index);
+                context.AddRange(entries.Select(r => new DisplayRow(metadata.GetValueOrDefault(r.Track.Id) ?? r.Track, r.EntryId)));
+                if (entries.Count < 25) break;
+            }
+        }
+        int target = selected.EntryId > 0 ? context.FindIndex(r => r.EntryId == selected.EntryId) : context.FindIndex(r => ReferenceEquals(r, selected));
+        if (target < 0) { context = [selected]; target = 0; }
+        store.SaveQueue(context.Select(r => r.Track));
+        queue.Tracks.Clear(); queue.Tracks.AddRange(context.Select(r => r.Track)); queue.Index = target;
+        SyncMiniPlayer();
     }
     async Task Play(Track track, double position = 0)
     {
@@ -419,9 +498,9 @@ public partial class MainWindow : Window
         int generation = ++playGeneration;
         current = track;
         RefreshCurrent();
-        SetStatus("Проверка доступности и загрузка потока…");
+        SetStatus("Checking availability and loading stream…");
         await player.Stop();
-        await Guard(async () => { if (track.Access == "unknown") { track = await Catalog().GetTrack(track.Id, ct); ct.ThrowIfCancellationRequested(); current = track; Remember(track); RefreshCurrent(); } var url = await Catalog().Stream(track.Id, ct); ct.ThrowIfCancellationRequested(); if (generation != playGeneration) return; await player.Open(url, ct, position); windows?.Track(track.Title); SetStatus("Воспроизведение • SoundCloud"); });
+        await Guard(async () => { if (track.Access == "unknown") { track = await Catalog().GetTrack(track.Id, ct); ct.ThrowIfCancellationRequested(); current = track; Remember(track); RefreshCurrent(); } var url = await Catalog().Stream(track.Id, ct); ct.ThrowIfCancellationRequested(); if (generation != playGeneration) return; await player.Open(url, ct, position); windows?.Track(track.Title); SetStatus(""); });
     }
     async Task Advance(int direction)
     {
@@ -429,7 +508,7 @@ public partial class MainWindow : Window
         if (track != null)
             await Play(track);
         else
-            SetStatus(direction > 0 ? "Конец очереди" : "Начало очереди");
+            SetStatus(direction > 0 ? "End of queue" : "Start of queue");
     }
     async void NextTrack(object s, RoutedEventArgs e) => await Guard(() => Advance(1));
     async void PreviousTrack(object s, RoutedEventArgs e) => await Guard(() => Advance(-1));
@@ -452,7 +531,7 @@ public partial class MainWindow : Window
     void EnqueueSelected(object s, RoutedEventArgs e)
     {
         if (Selected is { } row)
-            _ = Guard(() => { queue.Add(row.Track); store.SaveQueue(queue.Tracks); SetStatus("Добавлено в очередь"); return Task.CompletedTask; });
+            _ = Guard(() => { queue.Add(row.Track); store.SaveQueue(queue.Tracks); SetStatus("Added to queue"); return Task.CompletedTask; });
     }
     void RemoveSelected(object s, RoutedEventArgs e)
     {
@@ -499,6 +578,7 @@ public partial class MainWindow : Window
     }
     void RefreshCurrent()
     {
+        SyncMiniPlayer();
         if (IsVisible && WindowState != WindowState.Minimized && current != null)
         {
             NowTitle.Text = current.Title;
@@ -507,8 +587,8 @@ public partial class MainWindow : Window
                 NowArtwork.Url = current.Artwork;
         }
     }
-    void HomeView(object s, RoutedEventArgs e) => SetView("home");
-    void MinimizeClick(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    void HomeView(object s, RoutedEventArgs e) => LibraryView(s, e);
+    void MinimizeClick(object s, RoutedEventArgs e) { WindowState = WindowState.Minimized; if (windows?.TrayAvailable != false) Hide(); ShowMiniPlayer(); }
     void MaximizeClick(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     void CloseClick(object s, RoutedEventArgs e) => Close();
     bool? compactLayout;
@@ -516,8 +596,10 @@ public partial class MainWindow : Window
     {
         if (PlayerLayout == null)
             return;
+        UpdateWindowCorners();
         MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
         bool compact = ActualWidth < 820;
+        UpdatePlaylistLayout();
         if (compactLayout == compact)
             return;
         compactLayout = compact;
@@ -531,16 +613,41 @@ public partial class MainWindow : Window
         Grid.SetColumn(Transport, compact ? 0 : 1);
         Grid.SetRow(PlayerExtras, compact ? 1 : 0);
         Grid.SetColumn(PlayerExtras, compact ? 1 : 2);
-        SourceButton.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         ContentPanel.Margin = compact ? new Thickness(10, 6, 10, 10) : new Thickness(20, 6, 20, 16);
         ContentPanel.Padding = new Thickness(compact ? 10 : 16);
+        ImportPanel.Margin = ContentPanel.Margin;
+        ImportPanel.Padding = new Thickness(compact ? 14 : 24);
     }
     static string Format(double seconds) => TimeSpan.FromSeconds(Math.Max(0, seconds)).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
-    void SeekStarted(object s, MouseButtonEventArgs e) => dragging = true;
+    void SeekStarted(object s, MouseButtonEventArgs e)
+    {
+        if (player.Duration <= 0) return;
+        e.Handled = true;
+        dragging = true;
+        PositionSlider.Focus();
+        PositionSlider.CaptureMouse();
+        UpdateSeekPointer(e.GetPosition(PositionSlider).X);
+    }
+    void UpdateSeekPointer(double x)
+    {
+        double fraction = Math.Clamp((x - 9) / Math.Max(1, PositionSlider.ActualWidth - 18), 0, 1);
+        PositionSlider.Value = fraction * PositionSlider.Maximum;
+        TimeLabel.Text = Format(PositionSlider.Value) + " / " + Format(player.Duration);
+    }
+    void SeekMoved(object s, MouseEventArgs e)
+    {
+        if (dragging && PositionSlider.IsMouseCaptured) { e.Handled = true; UpdateSeekPointer(e.GetPosition(PositionSlider).X); }
+    }
+    void SeekCaptureLost(object s, MouseEventArgs e) { dragging = false; }
     async void SeekReleased(object s, MouseButtonEventArgs e)
     {
+        if (!dragging) return;
+        e.Handled = true;
+        UpdateSeekPointer(e.GetPosition(PositionSlider).X);
+        double position = PositionSlider.Value;
         dragging = false;
-        await Guard(() => player.Seek(PositionSlider.Value));
+        PositionSlider.ReleaseMouseCapture();
+        await Guard(() => player.Seek(position));
     }
     void VolumeChanged(object s, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -551,107 +658,6 @@ public partial class MainWindow : Window
     {
         if (current != null && Uri.TryCreate(current.Permalink, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "soundcloud.com")
             Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
-    }
-    void OpenSource(object s, RoutedEventArgs e)
-    {
-        if (current != null)
-            OpenSoundCloud(s, e);
-        else
-            Process.Start(new ProcessStartInfo("https://soundcloud.com") { UseShellExecute = true });
-    }
-    void CreatePlaylist(object s, RoutedEventArgs e)
-    {
-        string? name = Dialogs.Text(this, "Создать плейлист", "Название");
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-        playlistId = store.Create(name.Trim());
-        RefreshPlaylists(playlistId);
-        SetView("library");
-        page = 0;
-        ShowLibrary();
-    }
-    void RenamePlaylist(object s, RoutedEventArgs e)
-    {
-        if (playlistId == null)
-            return;
-        string? name = Dialogs.Text(this, "Переименовать", "Название", (PlaylistPicker.SelectedItem as PlaylistHeader)?.Name ?? "");
-        if (string.IsNullOrWhiteSpace(name))
-            return;
-        store.Rename(playlistId, name.Trim());
-        RefreshPlaylists();
-        ShowLibrary();
-    }
-    void DeletePlaylist(object s, RoutedEventArgs e)
-    {
-        if (playlistId == null)
-            return;
-        if (System.Windows.MessageBox.Show(this, "Удалить этот локальный плейлист?", "DIPlayer", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
-            return;
-        store.Delete(playlistId);
-        playlistId = null;
-        RefreshPlaylists();
-        ShowLibrary();
-    }
-    void AddToPlaylist(object s, RoutedEventArgs e)
-    {
-        if (Selected is not { } row)
-            return;
-        var list = store.Playlists();
-        if (list.Count == 0)
-        {
-            SetStatus("Сначала создайте локальный плейлист.");
-            return;
-        }
-        var selected = Dialogs.Pick(this, list);
-        if (selected == null)
-            return;
-        store.Add(selected.Id, [row.Track]);
-        SetStatus("Добавлено в «" + selected.Name + "»");
-        if (view == "library")
-        {
-            RefreshPlaylists();
-            ShowLibrary();
-        }
-    }
-    async void ImportClick(object s, RoutedEventArgs e)
-    {
-        if (importCancel != null)
-        {
-            SetStatus("Импорт уже выполняется.");
-            return;
-        }
-        string? url = Dialogs.Text(this, "Импорт публичного плейлиста", "https://soundcloud.com/автор/sets/плейлист");
-        if (string.IsNullOrWhiteSpace(url))
-            return;
-        importCancel = new();
-        CancelImport.Visibility = Visibility.Visible;
-        importing = Guard(async () => { var progress = new InlineProgress(SetStatus); string id = await new PlaylistImporter(Catalog(), store).Import(url, progress, importCancel.Token); RefreshPlaylists(id); SetView("library"); page = 0; ShowLibrary(); SetStatus(store.Playlists().Single(p => p.Id == id).Complete ? "Импорт завершён. Копия списка сохранена на этом ПК; аудио не скачивается." : "Сохранён неполный список: SoundCloud вернул не все заявленные записи."); });
-        await importing;
-        importCancel.Dispose();
-        importCancel = null;
-        importing = null;
-        CancelImport.Visibility = Visibility.Collapsed;
-        RefreshPlaylists();
-        if (view == "library")
-            ShowLibrary();
-    }
-    void CancelImportClick(object s, RoutedEventArgs e)
-    {
-        importCancel?.Cancel();
-        SetStatus("Импорт отменён. Полученная часть списка сохранена.");
-    }
-    void SettingsClick(object s, RoutedEventArgs e)
-    {
-        if (importCancel != null)
-        {
-            SetStatus("Сначала завершите или отмените импорт.");
-            return;
-        }
-        if (Dialogs.Configure(this, settings))
-        {
-            searchCancel?.Cancel();
-            Connect();
-        }
     }
     sealed class InlineProgress(Action<string> update) : IProgress<string>
     {

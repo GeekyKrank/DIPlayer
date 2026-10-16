@@ -3,7 +3,7 @@ using Microsoft.Data.Sqlite;
 using System.Text.Json;
 namespace DIPlayer.Storage;
 
-public sealed record PlaylistHeader(string Id, string Name, int Count, bool Complete)
+public sealed record PlaylistHeader(string Id, string Name, int Count, bool Complete, bool HasCover = false)
 {
     public override string ToString() => Name;
 }
@@ -12,11 +12,13 @@ public sealed class LibraryStore : IDisposable
 {
     readonly SqliteConnection db;
     public static string DataDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DIPlayer");
-    public LibraryStore()
+    public LibraryStore(string? directory = null)
     {
-        Directory.CreateDirectory(DataDirectory);
-        db = new SqliteConnection("Data Source=" + Path.Combine(DataDirectory, "library.db"));
+        string folder = directory ?? DataDirectory;
+        Directory.CreateDirectory(folder);
+        db = new SqliteConnection("Data Source=" + Path.Combine(folder, "library.db"));
         db.Open();
+        Exec("CREATE TABLE IF NOT EXISTS playlist_covers(playlist TEXT PRIMARY KEY,image BLOB NOT NULL)");
         Exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; CREATE TABLE IF NOT EXISTS playlists(id TEXT PRIMARY KEY,name TEXT NOT NULL,source TEXT,complete INTEGER NOT NULL DEFAULT 1); CREATE TABLE IF NOT EXISTS entries(id INTEGER PRIMARY KEY,playlist TEXT NOT NULL,position INTEGER NOT NULL,json TEXT NOT NULL); CREATE INDEX IF NOT EXISTS ix_entries ON entries(playlist,position); CREATE TABLE IF NOT EXISTS queue(position INTEGER PRIMARY KEY,json TEXT NOT NULL);");
         // Persist user-created references/order, not a cross-session copy of SoundCloud metadata.
         using var version = Command("PRAGMA user_version");
@@ -43,11 +45,11 @@ public sealed class LibraryStore : IDisposable
     }
     public List<PlaylistHeader> Playlists()
     {
-        using var c = Command("SELECT p.id,p.name,COUNT(e.id),p.complete FROM playlists p LEFT JOIN entries e ON e.playlist=p.id GROUP BY p.id ORDER BY p.name");
+        using var c = Command("SELECT p.id,p.name,COUNT(e.id),p.complete,EXISTS(SELECT 1 FROM playlist_covers c WHERE c.playlist=p.id) FROM playlists p LEFT JOIN entries e ON e.playlist=p.id GROUP BY p.id ORDER BY p.name");
         using var r = c.ExecuteReader();
         var list = new List<PlaylistHeader>();
         while (r.Read())
-            list.Add(new(r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetBoolean(3)));
+            list.Add(new(r.GetString(0), r.GetString(1), r.GetInt32(2), r.GetBoolean(3), r.GetBoolean(4)));
         return list;
     }
     public string Create(string name, string? source = null, bool complete = true)
@@ -57,11 +59,28 @@ public sealed class LibraryStore : IDisposable
         return id;
     }
     public void Rename(string id, string name) => Exec("UPDATE playlists SET name=$name WHERE id=$id", ("$name", name), ("$id", id));
+    public byte[]? Cover(string id)
+    {
+        using var c = Command("SELECT image FROM playlist_covers WHERE playlist=$id", ("$id", id));
+        return c.ExecuteScalar() as byte[];
+    }
+    public void Edit(string id, string name, bool changeCover, byte[]? image)
+    {
+        using var tx = db.BeginTransaction();
+        Rename(id, name);
+        if (changeCover)
+        {
+            if (image == null) Exec("DELETE FROM playlist_covers WHERE playlist=$id", ("$id", id));
+            else Exec("INSERT INTO playlist_covers VALUES($id,$image) ON CONFLICT(playlist) DO UPDATE SET image=$image", ("$id", id), ("$image", image));
+        }
+        tx.Commit();
+    }
     public void Complete(string id) => Exec("UPDATE playlists SET complete=1 WHERE id=$id", ("$id", id));
     public void Delete(string id)
     {
         using var tx = db.BeginTransaction();
         Exec("DELETE FROM entries WHERE playlist=$id", ("$id", id));
+        Exec("DELETE FROM playlist_covers WHERE playlist=$id", ("$id", id));
         Exec("DELETE FROM playlists WHERE id=$id", ("$id", id));
         tx.Commit();
     }
@@ -144,7 +163,7 @@ public sealed class LibraryStore : IDisposable
     {
         using var doc = JsonDocument.Parse(json);
         string id = doc.RootElement.GetProperty("Id").GetString()!;
-        return new Track(id, "Трек " + id, "Загрузка метаданных…", 0, null, "", "unknown");
+        return new Track(id, "Track " + id, "Loading track details…", 0, null, "", "unknown");
     }
     public void Dispose() => db.Dispose();
 }

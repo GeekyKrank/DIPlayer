@@ -34,20 +34,20 @@ public sealed class HlsPlayer : IDisposable
         var uri = new Uri(url);
         var data = await Download(uri, 1024*1024, ct);
         string manifest = Encoding.UTF8.GetString(data);
-        if (!manifest.StartsWith("#EXTM3U")) throw new CatalogException("Получен не HLS-манифест.");
-        if(manifest.Contains("#EXT-X-KEY") || manifest.Contains("#EXT-X-BYTERANGE")) throw new CatalogException("Зашифрованные и byte-range HLS потоки пока не поддерживаются.");
+        if (!manifest.StartsWith("#EXTM3U")) throw new CatalogException("The server did not return an HLS manifest.");
+        if(manifest.Contains("#EXT-X-KEY") || manifest.Contains("#EXT-X-BYTERANGE")) throw new CatalogException("Encrypted and byte-range HLS streams are not supported yet.");
         var list = new List<Segment>(); double start=0, duration=0;
         foreach(string line in manifest.Split('\n').Select(s=>s.Trim()))
         {
             if(line.StartsWith("#EXTINF:")) duration=double.Parse(line[8..].TrimEnd(','),CultureInfo.InvariantCulture);
             else if(line.Length>0 && line[0]!='#')
             {
-                if (duration<=0) throw new CatalogException("Ожидался конечный MP3 HLS-плейлист, а не master/live.");
+                if (duration<=0) throw new CatalogException("Expected a finite MP3 HLS playlist, not a master or live stream.");
                 var item = new Uri(uri,line); SoundCloudCatalog.ValidateCdn(item);
                 list.Add(new Segment(item,start,duration)); start+=duration; duration=0;
             }
         }
-        if(list.Count==0 || !manifest.Contains("#EXT-X-ENDLIST")) throw new CatalogException("Пустой или live-поток пока не поддерживается.");
+        if(list.Count==0 || !manifest.Contains("#EXT-X-ENDLIST")) throw new CatalogException("Empty and live streams are not supported yet.");
         ct.ThrowIfCancellationRequested();
         await change.WaitAsync(ct);
         try { await StopCore(); ct.ThrowIfCancellationRequested(); segments=list; Duration=start; await StartCore(Math.Clamp(position,0,Math.Max(0,start-.1)),false); }
@@ -57,7 +57,7 @@ public sealed class HlsPlayer : IDisposable
     {
         SoundCloudCatalog.ValidateCdn(uri);
         using var res = await http.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead,ct);
-        if(!res.IsSuccessStatusCode) throw new CatalogException($"Аудиосервер: HTTP {(int)res.StatusCode}. Попробуйте открыть трек заново.",(int)res.StatusCode);
+        if(!res.IsSuccessStatusCode) throw new CatalogException($"Audio server: HTTP {(int)res.StatusCode}. Try reopening the track.",(int)res.StatusCode);
         return await SoundCloudCatalog.ReadLimited(res.Content,max,ct);
     }
     public void Toggle() { paused=!paused;if(output==null)return;if(paused)output.Pause();else output.Play(); }
@@ -109,7 +109,7 @@ public sealed class HlsPlayer : IDisposable
                         pcm=new BufferedWaveProvider(decoder.OutputFormat){BufferDuration=TimeSpan.FromSeconds(4),ReadFully=true,DiscardOnBufferOverflow=false};
                         output=new WaveOutEvent { DesiredLatency=150,NumberOfBuffers=2,Volume=volume };
                         output.Init(pcm);
-                        output.PlaybackStopped+=(_,e)=> { if(e.Exception!=null && !ct.IsCancellationRequested) { faulted=true;Error?.Invoke("Аудиоустройство отключено. Подключите устройство и нажмите «Повторить»."); lifetime?.Cancel(); } };
+                        output.PlaybackStopped+=(_,e)=> { if(e.Exception!=null && !ct.IsCancellationRequested) { faulted=true;Error?.Invoke("Audio device disconnected. Connect a device and press Retry."); lifetime?.Cancel(); } };
                         if(!paused)output.Play();
                     }
                     int count=decoder.DecompressFrame(frame,decoded,0);
@@ -126,9 +126,9 @@ public sealed class HlsPlayer : IDisposable
             while(pcm?.BufferedBytes>0)await Task.Delay(100,ct);
             if(!ct.IsCancellationRequested) { output?.Stop(); Ended?.Invoke(); }
         }
-        catch(OperationCanceledException){if(!ct.IsCancellationRequested){faulted=true;Error?.Invoke("Аудиосервер не ответил вовремя. Проверьте сеть и нажмите «Повторить».");output?.Stop();}}
-        catch(HttpRequestException){faulted=true;Error?.Invoke("Нет связи с аудиосервером. Проверьте сеть и повторите.");output?.Stop();}
-        catch(Exception e){ if(!ct.IsCancellationRequested) { faulted=true;Error?.Invoke(e is CatalogException ? e.Message : "Не удалось декодировать поток или открыть аудиоустройство.");output?.Stop(); } }
+        catch(OperationCanceledException){if(!ct.IsCancellationRequested){faulted=true;Error?.Invoke("The audio server timed out. Check your network and press Retry.");output?.Stop();}}
+        catch(HttpRequestException){faulted=true;Error?.Invoke("Cannot reach the audio server. Check your network and retry.");output?.Stop();}
+        catch(Exception e){ if(!ct.IsCancellationRequested) { faulted=true;Error?.Invoke(e is CatalogException ? e.Message : "Could not decode the stream or open the audio device.");output?.Stop(); } }
         finally{decoder?.Dispose();}
     }
     public async Task Stop() { await change.WaitAsync();try { await StopCore();segments=[];Duration=0; }finally{change.Release();} }

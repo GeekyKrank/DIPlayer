@@ -9,7 +9,7 @@ public sealed class PlaybackQueue
     public void Add(Track t)
     {
         if (Tracks.Count >= 1000)
-            throw new CatalogException("Очередь ограничена 1000 треками.");
+            throw new CatalogException("The queue is limited to 1,000 tracks.");
         Tracks.Add(t);
     }
     public Track? Next(int direction)

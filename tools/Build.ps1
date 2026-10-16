@@ -9,6 +9,7 @@ try {
     $destination="dist/DIPlayer-$WindowsRid"
     & $dotnet publish src/DIPlayer -c Release -r $WindowsRid --self-contained true --artifacts-path .tools/release-artifacts -o $destination -p:DebugType=None -p:DebugSymbols=false
     if($LASTEXITCODE -ne 0){throw 'Windows publish failed'}
+    & (Join-Path $PSScriptRoot 'Test-Startup.ps1') -Executable (Join-Path $destination 'DIPlayer.exe')
     Copy-Item README.md,THIRD_PARTY_NOTICES.md -Destination $destination
     Copy-Item docs -Destination $destination -Recurse -Force
     Compress-Archive -Path $destination -DestinationPath "$destination.zip" -Force

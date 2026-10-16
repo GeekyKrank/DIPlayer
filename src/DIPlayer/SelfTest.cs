@@ -10,7 +10,15 @@ namespace DIPlayer;
 
 public partial class MainWindow
 {
+    static string? DiagnosticLibraryDirectory()
+    {
+        var args = Environment.GetCommandLineArgs();
+        int index = Array.IndexOf(args, "--test-library");
+        return args.Contains("--selftest") && index >= 0 && index + 1 < args.Length ? Path.GetFullPath(args[index + 1]) : null;
+    }
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, int message, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern int GetWindowRgn(IntPtr window, IntPtr region);
+    [DllImport("gdi32.dll")] static extern bool PtInRegion(IntPtr region, int x, int y);
     // Explicit diagnostic mode; no polling/screenshot capture runs in normal use.
     async Task RunSelfTest(string[] args)
     {
@@ -28,13 +36,73 @@ public partial class MainWindow
                 SetView("home");
                 UpdateLayout();
                 Capture(Path.Combine(directory, "home.png"));
+                if (args.Contains("--check-corners")) VerifyRoundedRegion();
                 Width = 460;
                 Height = 680;
                 await Task.Delay(200);
                 UpdateLayout();
                 Capture(Path.Combine(directory, "home-narrow.png"));
+                if (args.Contains("--check-corners")) VerifyRoundedRegion();
                 Width = 1200;
                 Height = 780;
+            }
+            if (args.Contains("--visual-only"))
+            {
+                if (args.Contains("--check-mini-player")) await VerifyMiniPlayer(directory);
+                if (args.Contains("--check-track-menu"))
+                {
+                    var menu = BuildTrackMenu(new System.Windows.Controls.ListBoxItem());
+                    if (menu.Items.Count != 2) throw new Exception("Track menu must contain only two add actions");
+                    menu.PlacementTarget = SearchBox;
+                    menu.IsOpen = true;
+                    await Task.Delay(200);
+                    menu.UpdateLayout();
+                    var bitmap = new RenderTargetBitmap((int)Math.Ceiling(menu.ActualWidth), (int)Math.Ceiling(menu.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(menu);
+                    var encoder = new PngBitmapEncoder();
+                    encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    using (var file = File.Create(Path.Combine(directory, "track-menu.png"))) encoder.Save(file);
+                    menu.IsOpen = false;
+                    await File.WriteAllTextAsync(Path.Combine(directory, "track-menu-check.txt"), "PASS two add actions only; custom dark popup and item templates render without standard icon gutter.");
+                }
+                if (args.Contains("--check-inline-actions")) await VerifyInlineActions(directory);
+                if (args.Contains("--check-playlist-cover")) await VerifyPlaylistCover(directory);
+                if (args.Contains("--check-library-cards")) await VerifyLibraryCards(directory);
+                if (args.Contains("--check-single-click")) await VerifySingleClick(directory);
+                if (args.Contains("--check-import-view"))
+                    await VerifyInlineImport(directory);
+                if (args.Contains("--check-icon"))
+                {
+                    if (windows?.TrayUsesAppIcon != true || windows.TrayAvailable != true || Icon == null)
+                        throw new Exception("Custom window or tray icon was not loaded");
+                    await File.WriteAllTextAsync(Path.Combine(directory, "icon-check.txt"), "PASS embedded application icon extracted; tray registered with application icon; window icon loaded");
+                }
+                if (args.Contains("--check-activation"))
+                    await VerifyTrayActivation(directory);
+                if (args.Contains("--check-brand-font"))
+                {
+                    var typeface = new Typeface(BrandTitle.FontFamily, BrandTitle.FontStyle, BrandTitle.FontWeight, BrandTitle.FontStretch);
+                    if (!typeface.TryGetGlyphTypeface(out var glyphs) || !glyphs.FamilyNames.Values.Contains("Dirty Stains"))
+                        throw new Exception("Dirty Stains was not resolved; a fallback font would be displayed");
+                    await File.WriteAllTextAsync(Path.Combine(directory, "brand-font-check.txt"), "PASS Dirty Stains resolves to the actual local font; title size=" + BrandTitle.FontSize);
+                }
+                if (args.Contains("--check-corners"))
+                {
+                    WindowState = WindowState.Maximized;
+                    await Task.Delay(250);
+                    UpdateLayout();
+                    if (WindowFrame.CornerRadius.TopLeft != 0 || WindowFrame.Clip != null)
+                        throw new Exception("Maximized frame must fill the screen without rounded clipping");
+                    Capture(Path.Combine(directory, "maximized.png"));
+                    WindowState = WindowState.Normal;
+                    await Task.Delay(250);
+                    UpdateLayout();
+                    VerifyRoundedRegion();
+                    Capture(Path.Combine(directory, "restored.png"));
+                    await File.WriteAllTextAsync(Path.Combine(directory, "window-shape-checks.txt"), "PASS native rounded region: normal, narrow, restored; PASS maximized frame has no rounded clipping");
+                }
+                Exit();
+                return;
             }
             int queryIndex = Array.IndexOf(args, "--query");
             string testQuery = queryIndex >= 0 ? args[queryIndex + 1] : "ambient";
@@ -45,7 +113,7 @@ public partial class MainWindow
             query = "ambient";
             SetView("search");
             ShowRows(found.Tracks.Select(t => new DisplayRow(t)));
-            Heading.Text = "Результаты поиска";
+            Heading.Text = "Search results";
             next = found.Next;
             Paging();
             queue.Tracks.Clear();
@@ -202,5 +270,113 @@ public partial class MainWindow
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var output = File.Create(file);
         encoder.Save(output);
+    }
+    void VerifyRoundedRegion()
+    {
+        var region = CreateRoundRectRgn(0, 0, 1, 1, 1, 1);
+        try
+        {
+            if (GetWindowRgn(new WindowInteropHelper(this).Handle, region) == 0 || PtInRegion(region, 0, 0) || !PtInRegion(region, 100, 100))
+                throw new Exception("Native rounded window region was not applied");
+        }
+        finally { DeleteObject(region); }
+    }
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetExtendedStyle(IntPtr window, int index);
+    async Task VerifyInlineImport(string directory)
+    {
+        int windowsBefore = System.Windows.Application.Current.Windows.Count;
+        int playlistsBefore = store.Playlists().Count;
+        string? temporaryPlaylist = null;
+        try
+        {
+            ImportClick(this, new RoutedEventArgs());
+            UpdateLayout();
+            if (view != "import" || !ImportPanel.IsVisible || ContentPanel.IsVisible || System.Windows.Application.Current.Windows.Count != windowsBefore)
+                throw new Exception("Import must be a page inside the original window");
+            Capture(Path.Combine(directory, "import.png"));
+            Width = 460;
+            Height = 680;
+            await Task.Delay(200);
+            UpdateLayout();
+            Capture(Path.Combine(directory, "import-narrow.png"));
+            ImportUrl.Text = "https://example.com/private";
+            await StartPlaylistImport();
+            if (!importError || importCancel != null || store.Playlists().Count != playlistsBefore)
+                throw new Exception("Invalid link must display an inline error without creating a playlist");
+            Capture(Path.Combine(directory, "import-invalid.png"));
+            ImportUrl.Text = "https://soundcloud.com/laugebabagnohm/sets/ambient-soundscapes-selections";
+            var cancelled = StartPlaylistImport();
+            CancelImportClick(this, new RoutedEventArgs());
+            await cancelled;
+            if (importCancel != null || !ImportStart.IsEnabled || ImportCancel.IsVisible)
+                throw new Exception("Cancelled import did not restore the inline form");
+            if (importedPlaylistId != null) store.Delete(importedPlaylistId);
+            Width = 1200;
+            Height = 780;
+            await StartPlaylistImport();
+            temporaryPlaylist = importedPlaylistId;
+            if (temporaryPlaylist == null || importError || importProgress is not { Imported: > 0 } || !ImportOpenPlaylist.IsVisible || !ImportStart.IsEnabled)
+                throw new Exception("Real inline import failed: " + importMessage);
+            if (System.Windows.Application.Current.Windows.Count != windowsBefore)
+                throw new Exception("Import opened another application window");
+            UpdateLayout();
+            Capture(Path.Combine(directory, "import-complete.png"));
+            Width = 460;
+            Height = 680;
+            await Task.Delay(200);
+            UpdateLayout();
+            Capture(Path.Combine(directory, "import-complete-narrow.png"));
+            OpenImportedPlaylist(this, new RoutedEventArgs());
+            if (view != "library" || playlistId != temporaryPlaylist || rows.Count == 0)
+                throw new Exception("Imported playlist did not open in the same window");
+            await File.WriteAllTextAsync(Path.Combine(directory, "inline-import-check.txt"), $"PASS inline navigation, invalid link, cancellation, real public import ({importProgress.Imported}/{importProgress.Total}, unavailable={importProgress.Unavailable}), open local playlist; application window count stayed {windowsBefore}.");
+        }
+        finally
+        {
+            if (temporaryPlaylist != null) store.Delete(temporaryPlaylist);
+            importedPlaylistId = null;
+            playlistId = null;
+            RefreshPlaylists();
+        }
+    }
+    async Task VerifyTrayActivation(string directory)
+    {
+        var other = new Window { Title = "DIPlayer · проверка фокуса", Width = 640, Height = 360, WindowStartupLocation = WindowStartupLocation.CenterScreen, Content = "Проверка возврата DIPlayer из трея" };
+        try
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            // Real input is needed, not just programmatic activation: the OS checks
+            // which process received the last user input before allowing foreground changes.
+            var input = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            System.Windows.Input.MouseButtonEventHandler receive = (_, _) => input.TrySetResult();
+            PreviewMouseDown += receive;
+            try
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory, "activation-ready.txt"), "Waiting for a real click in DIPlayer before the diagnostic");
+                await input.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                await Task.Delay(100);
+            }
+            finally { PreviewMouseDown -= receive; }
+            for (int cycle = 0; cycle < 3; cycle++)
+            {
+                WindowState = WindowState.Minimized;
+                DIPlayer.SystemIntegration.WindowActivation.Restore(other);
+                await Task.Delay(150);
+                if (DIPlayer.SystemIntegration.WindowActivation.GetForegroundWindow() != new WindowInteropHelper(other).Handle)
+                    throw new Exception("Activation check could not establish the competing foreground window");
+                PostMessage(handle, 0x802B, (IntPtr)1, (IntPtr)0x203);
+                await Task.Delay(350);
+                if (!IsVisible || WindowState != WindowState.Normal || DIPlayer.SystemIntegration.WindowActivation.GetForegroundWindow() != handle || !IsActive || !timer.IsEnabled)
+                    throw new Exception("Tray restore did not activate DIPlayer in the foreground");
+                if (Topmost || (GetExtendedStyle(handle, -20) & 0x8) != 0)
+                    throw new Exception("Tray restore left the player permanently topmost");
+                other.Activate();
+                await Task.Delay(150);
+                if (DIPlayer.SystemIntegration.WindowActivation.GetForegroundWindow() != new WindowInteropHelper(other).Handle)
+                    throw new Exception("Another window could not take focus after tray restore");
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory, "tray-activation-check.txt"), "PASS 3 simulated tray restores over a competing window: visible, foreground, active, UI timer enabled, no persistent topmost; competing window can take focus again. Physical tray click is not simulated by this check.");
+        }
+        finally { other.Close(); }
     }
 }
