@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        SyncPlaybackModes();
         string localFonts = Path.Combine(LibraryStore.DataDirectory, "fonts");
         if (File.Exists(Path.Combine(localFonts, "DirtyStains-DEMO.otf")))
             BrandTitle.FontFamily = new System.Windows.Media.FontFamily(new Uri(localFonts + Path.DirectorySeparatorChar), "./#Dirty Stains");
@@ -50,7 +51,7 @@ public partial class MainWindow : Window
         player.Volume = (float)settings.Volume;
         timer.Tick += (_, _) => RefreshPosition();
         player.Error += message => Dispatcher.BeginInvoke(() => SetStatus(message));
-        player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && generation == playGeneration) await Guard(() => Advance(1)); }); };
+        player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && generation == playGeneration) await Guard(() => Advance(1, true)); }); };
         Loaded += async (_, _) =>
         {
             // Loaded can fire again after a hidden WPF window is attached to its presentation source.
@@ -141,8 +142,7 @@ public partial class MainWindow : Window
             timer.Stop();
             searchCancel?.Cancel();
             metadataCancel?.Cancel();
-            coverCancel?.Cancel();
-            searchGeneration++;
+                searchGeneration++;
         }
     }
     void VisiblePropertyChanged(object sender, DependencyPropertyChangedEventArgs e) => VisibilityChanged(sender, EventArgs.Empty);
@@ -162,16 +162,19 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        libraryArtworkCancel?.Cancel();
         miniPlayer?.Close();
         timer.Stop();
         searchCancel?.Cancel();
         metadataCancel?.Cancel();
         playCancel?.Cancel();
         importCancel?.Cancel();
-        coverCancel?.Cancel();
+        accountCancel?.Cancel();
         windows?.Dispose();
         if (importing != null)
             await importing;
+        if (accountTask != null)
+            await accountTask;
         await player.Stop();
         player.Dispose();
         settings.Volume = VolumeSlider.Value;
@@ -230,7 +233,7 @@ public partial class MainWindow : Window
         HomePanel.Visibility = value == "home" ? Visibility.Visible : Visibility.Collapsed;
         ContentPanel.Visibility = value is "search" or "library" or "queue" ? Visibility.Visible : Visibility.Collapsed;
         LibraryPanel.Visibility = Visibility.Collapsed;
-        if (value != "library") { coverCancel?.Cancel(); PlaylistSummary.Visibility = Visibility.Collapsed; PlaylistSummaryColumn.Width = new GridLength(0); }
+        if (value != "library") { libraryArtworkCancel?.Cancel(); PlaylistSummary.Visibility = Visibility.Collapsed; PlaylistSummaryColumn.Width = new GridLength(0); }
         ImportPanel.Visibility = value == "import" ? Visibility.Visible : Visibility.Collapsed;
         HomeNav.Tag = value is "home" or "library" ? "active" : null;
         SearchNav.Tag = value == "search" ? "active" : null;
@@ -286,6 +289,17 @@ public partial class MainWindow : Window
             ct.ThrowIfCancellationRequested();
             if (rows.Count != snapshot.Length || !rows.SequenceEqual(snapshot))
                 return;
+            if (view == "library" && !libraryOverview)
+            {
+                var absent = snapshot.Where(r => r.EntryId > 0 && r.Track.Access == "unknown" &&
+                    (!metadata.TryGetValue(r.Track.Id, out var details) || details.Issue == "Track details unavailable")).ToArray();
+                if (absent.Length > 0)
+                {
+                    foreach (var row in absent) store.Hide(row.EntryId);
+                    ShowLibrary();
+                    return;
+                }
+            }
             int selected = Tracks.SelectedIndex;
             for (int i = 0; i < rows.Count; i++)
             {
@@ -384,7 +398,6 @@ public partial class MainWindow : Window
     void ShowLibrary()
     {
         libraryOverview = false;
-        coverCancel?.Cancel();
         LibraryPanel.Visibility = Visibility.Collapsed;
         ContentPanel.Visibility = Visibility.Visible;
         UpdatePlaylistLayout();
@@ -502,9 +515,9 @@ public partial class MainWindow : Window
         await player.Stop();
         await Guard(async () => { if (track.Access == "unknown") { track = await Catalog().GetTrack(track.Id, ct); ct.ThrowIfCancellationRequested(); current = track; Remember(track); RefreshCurrent(); } var url = await Catalog().Stream(track.Id, ct); ct.ThrowIfCancellationRequested(); if (generation != playGeneration) return; await player.Open(url, ct, position); windows?.Track(track.Title); SetStatus(""); });
     }
-    async Task Advance(int direction)
+    async Task Advance(int direction, bool automatic = false)
     {
-        var track = queue.Next(direction);
+        var track = automatic && settings.RepeatMode == 2 && current != null ? current : queue.Navigate(direction, settings.RepeatMode == 1, settings.Shuffle);
         if (track != null)
             await Play(track);
         else
@@ -609,6 +622,7 @@ public partial class MainWindow : Window
         ControlsColumn.Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(160);
         ExtrasColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         Grid.SetColumnSpan(TrackInfo, compact ? 2 : 1);
+        Grid.SetColumn(PlaybackModes, compact ? 1 : 0);
         Grid.SetRow(Transport, compact ? 1 : 0);
         Grid.SetColumn(Transport, compact ? 0 : 1);
         Grid.SetRow(PlayerExtras, compact ? 1 : 0);

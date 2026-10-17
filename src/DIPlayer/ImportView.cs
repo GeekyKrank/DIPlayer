@@ -28,7 +28,7 @@ public partial class MainWindow
 
     async Task StartPlaylistImport()
     {
-        if (importCancel != null) return;
+        if (importCancel != null || accountCancel != null) return;
         string url;
         try { url = SoundCloudCatalog.PublicPlaylistUrl(ImportUrl.Text.Trim()); }
         catch (CatalogException e)
@@ -96,14 +96,16 @@ public partial class MainWindow
     }
     void SyncImportView()
     {
+        SyncLibraryImportStatus();
         if (ImportPanel == null || view != "import" || !IsVisible || WindowState == WindowState.Minimized) return;
         bool running = importCancel != null;
-        ImportUrl.IsReadOnly = running;
-        ImportStart.IsEnabled = !running;
+        ImportUrl.IsReadOnly = running || accountCancel != null;
+        ImportStart.IsEnabled = !running && accountCancel == null;
         ImportCancel.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
         ImportOpenPlaylist.Visibility = !running && importedPlaylistId != null ? Visibility.Visible : Visibility.Collapsed;
         ImportMessage.Text = importMessage;
         ImportMessage.Foreground = importError ? (Brush)FindResource("Accent") : Brushes.DarkGray;
+        SyncAccountView();
         ImportProgressPanel.Visibility = importProgress != null ? Visibility.Visible : Visibility.Collapsed;
         if (importProgress is { } progress)
         {

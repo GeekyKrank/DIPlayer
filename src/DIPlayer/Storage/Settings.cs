@@ -14,6 +14,10 @@ public sealed class Settings
         get; set;
     }
     public double Volume { get; set; } = .6;
+    public bool LibraryTableView { get; set; }
+    public int RepeatMode { get; set; }
+    public bool Shuffle { get; set; }
+    public bool OldestPlaylistsFirst { get; set; }
     static string FilePath => Path.Combine(LibraryStore.DataDirectory, "settings.json");
     public static Settings Load()
     {

@@ -7,9 +7,11 @@ using DIPlayer.Storage;
 
 namespace DIPlayer;
 
-public sealed record PlaylistCard(string Id, string Name, int Count, string? Cover1, string? Cover2, string? Cover3, string? Cover4, System.Windows.Media.ImageSource? CustomCover = null)
+public sealed record PlaylistCard(string Id, string Name, int Count, string? Cover1, string? Cover2, string? Cover3, string? Cover4, System.Windows.Media.ImageSource? CustomCover = null, bool Complete = true)
 {
     public string CountLabel => $"{Count} tracks";
+    public string StatusLabel => Complete ? "Playlist" : "Import incomplete";
+    public string? SingleCover => Cover1;
 }
 
 public partial class MainWindow
@@ -18,16 +20,15 @@ public partial class MainWindow
     readonly ObservableCollection<PlaylistCard> playlistCards = [];
     bool libraryOverview;
     int libraryPage;
-    CancellationTokenSource? coverCancel;
+    CancellationTokenSource? libraryArtworkCancel;
     readonly Dictionary<string, System.Windows.Media.ImageSource> localCovers = [];
 
     PlaylistCard MakeCard(PlaylistHeader header)
     {
-        var covers = store.Page(header.Id, 0).Take(4)
-            .Select(r => metadata.GetValueOrDefault(r.Track.Id)?.Artwork).ToArray();
         return new(header.Id, header.Name, header.Count,
-            covers.ElementAtOrDefault(0), covers.ElementAtOrDefault(1), covers.ElementAtOrDefault(2), covers.ElementAtOrDefault(3), LocalCover(header));
+            header.Artwork, null, null, null, LocalCover(header), header.Complete);
     }
+
     System.Windows.Media.ImageSource? LocalCover(PlaylistHeader header)
     {
         if (!header.HasCover) return null;
@@ -41,51 +42,61 @@ public partial class MainWindow
 
     void ShowLibraryOverview()
     {
+        SyncLibraryImportStatus();
+        libraryArtworkCancel?.Cancel();
         CloseActionPanel(false);
         libraryOverview = true;
         UpdatePlaylistLayout();
         metadataCancel?.Cancel();
-        coverCancel?.Cancel();
         rows.Clear();
         ContentPanel.Visibility = Visibility.Collapsed;
         LibraryPanel.Visibility = Visibility.Visible;
-        var all = store.Playlists().Where(p => p.Name.Contains(LibraryFilter.Text.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList();
+        var all = store.Playlists(settings.OldestPlaylistsFirst).Where(p => p.Name.Contains(LibraryFilter.Text.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList();
         libraryPage = Math.Min(libraryPage, Math.Max(0, (all.Count - 1) / CardsPerPage));
         var visible = all.Skip(libraryPage * CardsPerPage).Take(CardsPerPage).ToArray();
         playlistCards.Clear();
         foreach (var header in visible) playlistCards.Add(MakeCard(header));
         PlaylistCards.ItemsSource = playlistCards;
+        ApplyLibraryView();
         LibraryEmpty.Visibility = all.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         LibraryEmpty.Text = LibraryFilter.Text.Length == 0 ? "No playlists yet. Click + or import a public playlist." : "No playlists found.";
         LibraryPrevious.IsEnabled = libraryPage > 0;
         LibraryNext.IsEnabled = (libraryPage + 1) * CardsPerPage < all.Count;
         LibraryPageLabel.Text = $"{libraryPage + 1} / {Math.Max(1, (all.Count + CardsPerPage - 1) / CardsPerPage)}";
-        if (IsVisible && WindowState != WindowState.Minimized) _ = LoadPlaylistCovers(visible);
+        if (IsVisible && WindowState != WindowState.Minimized && visible.Any(h => h.Artwork == null && !h.HasCover && h.Count > 0))
+            _ = FillMissingPlaylistArtwork(visible);
+
+
     }
 
-    async Task LoadPlaylistCovers(PlaylistHeader[] headers)
+    async Task FillMissingPlaylistArtwork(PlaylistHeader[] headers)
     {
-        coverCancel?.Cancel();
-        coverCancel = new();
-        var ct = coverCancel.Token;
+        libraryArtworkCancel?.Cancel();
+        libraryArtworkCancel = new();
+        var ct = libraryArtworkCancel.Token;
         try
         {
-            var ids = headers.SelectMany(h => store.Page(h.Id, 0).Take(4)).Select(r => r.Track.Id)
-                .Distinct().Where(id => !metadata.ContainsKey(id)).ToArray();
-            foreach (var batch in ids.Chunk(25))
+            var candidates = headers.Where(h => h.Artwork == null && !h.HasCover && h.Count > 0).ToArray();
+            var references = candidates.ToDictionary(h => h.Id, h => store.Page(h.Id, 0).Take(4).Select(r => r.Track.Id).ToArray());
+            var resolved = new Dictionary<string, Track>();
+            foreach (var batch in references.Values.SelectMany(ids => ids).Distinct().Chunk(25))
+                foreach (var track in await Catalog().GetTracks(batch, ct)) resolved[track.Id] = track;
+            ct.ThrowIfCancellationRequested();
+            foreach (var header in candidates)
             {
-                foreach (var track in await Catalog().GetTracks(batch, ct)) Remember(track);
-                ct.ThrowIfCancellationRequested();
-                if (!libraryOverview || view != "library" || !IsVisible) return;
+                string? artwork = references[header.Id].Select(id => resolved.GetValueOrDefault(id)?.Artwork).FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
+                if (artwork == null) continue;
+                // A custom cover or an import may have completed while the request was in flight.
+                var currentHeader = store.Playlists().FirstOrDefault(h => h.Id == header.Id);
+                if (currentHeader == null || currentHeader.Artwork != null || currentHeader.HasCover) continue;
+                store.SetArtwork(header.Id, artwork);
+                if (!libraryOverview || view != "library") continue;
                 for (int i = 0; i < playlistCards.Count; i++)
-                {
-                    var header = headers.FirstOrDefault(h => h.Id == playlistCards[i].Id);
-                    if (header != null) playlistCards[i] = MakeCard(header);
-                }
+                    if (playlistCards[i].Id == header.Id) playlistCards[i] = MakeCard(currentHeader with { Artwork = artwork });
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { SetStatus(e is CatalogException ? e.Message : "Could not load artwork. Local playlists remain available."); }
+        catch (Exception e) when (e is CatalogException or HttpRequestException) { }
     }
 
     void FilterPlaylists(object s, TextChangedEventArgs e)
@@ -93,6 +104,31 @@ public partial class MainWindow
         if (LibraryPanel == null || view != "library" || !libraryOverview) return;
         libraryPage = 0;
         ShowLibraryOverview();
+    }
+    void TogglePlaylistSort(object s, RoutedEventArgs e)
+    {
+        settings.OldestPlaylistsFirst = !settings.OldestPlaylistsFirst;
+        libraryPage = 0;
+        ShowLibraryOverview();
+    }
+    void ToggleLibraryView(object s, RoutedEventArgs e)
+    {
+        settings.LibraryTableView = !settings.LibraryTableView;
+        ApplyLibraryView();
+    }
+    void ApplyLibraryView()
+    {
+        PlaylistSortButton.Content = settings.OldestPlaylistsFirst ? "\uE74A" : "\uE74B";
+        PlaylistSortButton.ToolTip = settings.OldestPlaylistsFirst ? "Oldest playlists first · click for newest" : "Newest playlists first · click for oldest";
+        System.Windows.Automation.AutomationProperties.SetName(PlaylistSortButton, (string)PlaylistSortButton.ToolTip);
+        bool table = settings.LibraryTableView;
+        PlaylistCards.ItemTemplate = (DataTemplate)FindResource(table ? "PlaylistTableTemplate" : "PlaylistCardTemplate");
+        PlaylistCards.ItemsPanel = (ItemsPanelTemplate)FindResource(table ? "PlaylistTablePanel" : "PlaylistCardPanel");
+        PlaylistCards.ItemContainerStyle = (Style)FindResource(table ? "PlaylistTableItem" : "PlaylistCardItem");
+        PlaylistTableHeading.Visibility = table ? Visibility.Visible : Visibility.Collapsed;
+        LibraryViewToggle.Content = table ? "\uE80A" : "\uE8FD";
+        LibraryViewToggle.ToolTip = table ? "Show playlist cards" : "Show playlist table";
+        System.Windows.Automation.AutomationProperties.SetName(LibraryViewToggle, (string)LibraryViewToggle.ToolTip);
     }
     void PreviousLibraryCards(object s, RoutedEventArgs e) { libraryPage = Math.Max(0, libraryPage - 1); ShowLibraryOverview(); }
     void NextLibraryCards(object s, RoutedEventArgs e) { libraryPage++; ShowLibraryOverview(); }
@@ -107,7 +143,7 @@ public partial class MainWindow
     }
     void OpenLocalPlaylist(string id)
     {
-        coverCancel?.Cancel();
+        libraryArtworkCancel?.Cancel();
         RefreshPlaylists(id);
         SetView("library");
         page = 0;

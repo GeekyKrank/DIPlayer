@@ -9,7 +9,7 @@ public sealed record Track(string Id, string Title, string Artist, long Duration
     public string Availability => Issue ?? (Access == "preview" ? "Preview only" : Access == "blocked" ? "Unavailable: no reason provided" : "");
 }
 public sealed record TrackPage(List<Track> Tracks, string? Next);
-public sealed record PlaylistInfo(string Id, string Title, int Count, bool Public);
+public sealed record PlaylistInfo(string Id, string Title, int Count, bool Public, string? Artwork = null, string? CreatedAt = null);
 public sealed class LocalPlaylist
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");

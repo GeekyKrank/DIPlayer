@@ -143,7 +143,7 @@ public sealed class SoundCloudCatalog(string clientId, string clientSecret, stri
         using var json = await Json("/resolve?url=" + Uri.EscapeDataString(PublicPlaylistUrl(url)), ct);
         var r = json.RootElement;
         if (Text(r,"kind") != "playlist" || Text(r,"sharing") != "public") throw new CatalogException("The URL does not point to a public playlist.");
-        return new PlaylistInfo(Id(r), Text(r,"title") ?? "Import", Number(r,"track_count"), true);
+        return new PlaylistInfo(Id(r), Text(r,"title") ?? "Import", Number(r,"track_count"), true, Text(r,"artwork_url"), Text(r,"created_at"));
     }
     public async Task<TrackPage> PlaylistTracks(string id, string? next, CancellationToken ct)
     {

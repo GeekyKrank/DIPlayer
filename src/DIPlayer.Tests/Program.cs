@@ -1,4 +1,5 @@
 using DIPlayer.Core;
+using System.IO;
 using DIPlayer.Storage;
 using DIPlayer.Queue;
 
@@ -10,7 +11,7 @@ var queue=new PlaybackQueue();queue.Add(track);queue.Add(track with{Id="2"});que
 Check(SoundCloudCatalog.PublicPlaylistUrl("https://soundcloud.com/test/sets/list?utm_source=abc")=="https://soundcloud.com/test/sets/list","public playlist URL normalization");
 foreach(string bad in new[]{"http://soundcloud.com/a/sets/b","https://evil.test/a/sets/b","https://soundcloud.com/a/sets/b?secret_token=xyz","https://soundcloud.com/a/track"})
 {bool rejected=false;try{SoundCloudCatalog.PublicPlaylistUrl(bad);}catch(CatalogException){rejected=true;}Check(rejected,"reject invalid/private playlist URL");}
-using var store=new LibraryStore();string id=store.Create("__DIPlayer integration test__");
+using var store=new LibraryStore(Path.Combine(Path.GetTempPath(),"DIPlayer-check-"+Guid.NewGuid().ToString("N")));string id=store.Create("__DIPlayer integration test__");
 try
 {
     store.Add(id,Enumerable.Range(0,1001).Select(i=>track with{Id=i.ToString(),Title="Track "+i}));
@@ -22,6 +23,72 @@ try
 }
 finally{store.Delete(id);}
 Check(!store.Playlists().Any(p=>p.Id==id),"delete removes test playlist");
+string accountSource="soundcloud-account:test:"+Guid.NewGuid().ToString("N");
+string original=store.Create("Account list"), updated=store.Create("Remote rename"), partial=store.Create("Partial",complete:false);
+try
+{
+    store.Add(original,[track,track with { Id="missing", Issue="Track details unavailable" }]);
+    Check(store.Playlists().Single(p=>p.Id==original).Count==1,"missing API placeholders are excluded from stored playlist counts");
+    Check(store.PublishAccountImport(original,accountSource,true)==original,"first account import publishes a local playlist");
+    store.Edit(original,"My custom name",true,[1,2,3]);
+    store.SetArtwork(original,"https://i1.sndcdn.com/playlist-cover.jpg");
+    Check(store.Playlists().Single(p=>p.Id==original).Artwork=="https://i1.sndcdn.com/playlist-cover.jpg","original playlist artwork persists separately from custom cover");
+    store.Add(updated,[track,track with{Id="2"}]);
+    Check(store.PublishAccountImport(updated,accountSource,true)==original,"repeat account import reuses the existing playlist");
+    Check(store.Playlists().Single(p=>p.Id==original).Count==2&&store.Playlists().Single(p=>p.Id==original).Name=="My custom name"&&store.Cover(original)!.SequenceEqual(new byte[]{1,2,3}),"account refresh preserves the custom name and cover");
+    store.Add(partial,[track]);
+    Check(store.PublishAccountImport(partial,accountSource,false)==partial&&store.Playlists().Single(p=>p.Id==original).Count==2&&!store.Playlists().Single(p=>p.Id==partial).Complete,"incomplete refresh cannot overwrite a completed local copy");
+}
+finally{store.Delete(original);store.Delete(updated);store.Delete(partial);}
+string oldList=store.Create("Z old"), likes=store.Create("Favorites", "soundcloud-account:test:likes"), newList=store.Create("A new");
+try
+{
+var ordered=store.Playlists().Where(p=>new[]{oldList,likes,newList}.Contains(p.Id)).Select(p=>p.Id).ToArray();
+Check(ordered.SequenceEqual(new[]{likes,newList,oldList}),"Likes first, then newest playlists first");
+store.Rename(oldList,"AAA renamed");
+Check(store.Playlists().Where(p=>new[]{oldList,likes,newList}.Contains(p.Id)).Select(p=>p.Id).SequenceEqual(ordered),"renaming preserves chronology");
+}
+finally{store.Delete(oldList);store.Delete(likes);store.Delete(newList);}
+string restartFolder=Path.Combine(Path.GetTempPath(),"DIPlayer-restart-"+Guid.NewGuid().ToString("N"));
+string restartId;
+using(var first=new LibraryStore(restartFolder))
+{
+ restartId=first.Create("Persistent playlist","soundcloud-account:restart:playlist:1");
+ first.Add(restartId,[track,track with {Id="2"}]);
+ first.SetArtwork(restartId,"https://i1.sndcdn.com/cover.jpg");
+}
+using(var second=new LibraryStore(restartFolder))
+{
+ Check(second.Playlists().Single().Id==restartId && second.Playlists().Single().Count==2 && second.Playlists().Single().Artwork!=null,"playlist, tracks and cover survive closing and reopening storage");
+ second.Hide(second.Page(restartId,0)[0].EntryId);
+ Check(second.Playlists().Single().Count==1 && second.Page(restartId,0).Count==1,"missing tracks are hidden without deleting playlist");
+}
+using(var third=new LibraryStore(restartFolder))
+ Check(third.Playlists().Single().Id==restartId && third.Playlists().Single().Count==1,"hidden state and playlist survive second restart");
+Check(File.Exists(Path.Combine(restartFolder,"library.saved.db")),"nonempty library backup is saved");
+var modes=new PlaybackQueue();
+modes.Tracks.AddRange(Enumerable.Range(0,6).Select(i=>track with {Id="shuffle-"+i}));
+modes.Index=0;
+var visited=new HashSet<string>{"shuffle-0"};
+for(int i=0;i<5;i++) Check(visited.Add(modes.Navigate(1,false,true)!.Id),"shuffle visits a new track");
+Check(modes.Navigate(1,false,true)==null,"shuffle stops after a full cycle with repeat off");
+int last=modes.Index;
+Check(modes.Navigate(-1,false,true)!=null && modes.Navigate(1,false,true)!=null && modes.Index==last,"shuffle previous follows playback history");
+Check(modes.Navigate(1,true,true)!=null && modes.Index!=last,"repeat playlist starts another shuffled cycle");
+modes.Index=5;Check(modes.Navigate(1,true,false)?.Id=="shuffle-0","repeat playlist wraps at end");
+modes.Index=0;Check(modes.Navigate(-1,true,false)?.Id=="shuffle-5","repeat playlist wraps backwards");
+string dateFolder=Path.Combine(Path.GetTempPath(),"DIPlayer-date-"+Guid.NewGuid().ToString("N"));
+string newer,older,favorites;
+using(var dates=new LibraryStore(dateFolder))
+{
+ newer=dates.Create("Newer on SoundCloud"); older=dates.Create("Older on SoundCloud"); favorites=dates.Create("Likes","soundcloud-account:date:likes");
+ dates.SetCreatedAt(newer,"2025-01-01T12:00:00Z"); dates.SetCreatedAt(older,"2018/06/01 12:00:00 +0000");
+ dates.SetCreatedAt(newer,"invalid");
+ Check(dates.Playlists().Select(p=>p.Id).SequenceEqual(new[]{favorites,newer,older}),"newest sort uses SoundCloud creation date, not import order");
+ Check(dates.Playlists(true).Select(p=>p.Id).SequenceEqual(new[]{favorites,older,newer}),"oldest sort preserves Likes at the top");
+}
+using(var dates=new LibraryStore(dateFolder))
+ Check(dates.Playlists(true).Select(p=>p.Id).SequenceEqual(new[]{favorites,older,newer}),"creation-date sorting survives restart");
 Console.WriteLine("All integration checks passed");
 if(args.Contains("--network"))
 {

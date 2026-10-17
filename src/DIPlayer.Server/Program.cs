@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
+using DIPlayer.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 // Do not log query strings, signed audio URLs, Authorization, or application keys.
@@ -12,6 +13,9 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
 builder.WebHost.ConfigureKestrel(o => { o.Limits.MaxRequestBodySize = 0; o.Limits.MaxRequestLineSize = 8192; o.Limits.MaxConcurrentConnections = 32; });
 string clientId = Environment.GetEnvironmentVariable("SOUNDCLOUD_CLIENT_ID") ?? throw new InvalidOperationException("Set SOUNDCLOUD_CLIENT_ID");
 string clientSecret = Environment.GetEnvironmentVariable("SOUNDCLOUD_CLIENT_SECRET") ?? throw new InvalidOperationException("Set SOUNDCLOUD_CLIENT_SECRET");
+builder.Services.AddSingleton(new AccountConnect(clientId, clientSecret,
+    Environment.GetEnvironmentVariable("DIPLAYER_REDIRECT_URI") ?? "https://158-180-35-133.sslip.io/diplayer/auth/callback",
+    new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(18) }));
 builder.Services.AddSingleton(new SoundCloudCatalog(clientId, clientSecret, Environment.GetEnvironmentVariable("DIPLAYER_TOKEN_FILE") ?? "private/token.json"));
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, CatalogJsonContext.Default));
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -60,6 +64,16 @@ app.Use(async (ctx, next) =>
 app.UseRateLimiter();
 static string? Next(string? next) => string.IsNullOrEmpty(next) ? null : next;
 app.MapGet("/health", () => new { service = "DIPlayer catalogue", status = "ok" });
+app.MapPost("/auth/start", (AccountConnect connect) => connect.Start());
+app.MapGet("/auth/callback", async (HttpContext ctx, AccountConnect connect, CancellationToken ct) =>
+{
+    ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
+    ctx.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    return Results.Text(await connect.Callback(ctx.Request.Query["state"], ctx.Request.Query["code"], ctx.Request.Query["error"], ct), "text/plain; charset=utf-8");
+});
+app.MapGet("/auth/session/{id}", (string id, HttpContext ctx, AccountConnect connect) => connect.Status(id, ctx.Request.Headers.Authorization));
+app.MapGet("/auth/session/{id}/data", async (string id, string kind, string? playlist, string? next, HttpContext ctx, AccountConnect connect, CancellationToken ct) => await connect.Data(id, ctx.Request.Headers.Authorization, kind, playlist, next, ct));
+app.MapDelete("/auth/session/{id}", async (string id, HttpContext ctx, AccountConnect connect, CancellationToken ct) => { await connect.Disconnect(id, ctx.Request.Headers.Authorization, ct); return Results.NoContent(); });
 app.MapGet("/search", async (string q, string? next, SoundCloudCatalog api, CancellationToken ct) =>
 {
     if (q.Length is < 1 or > 200)

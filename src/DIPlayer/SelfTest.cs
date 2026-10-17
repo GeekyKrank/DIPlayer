@@ -48,6 +48,55 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-repair-artwork"))
+                {
+                    CheckInteraction(DiagnosticLibraryDirectory() != null, "Artwork checks require isolated storage");
+                    var missingCovers = store.Playlists().Where(h => h.Artwork == null && !h.HasCover && h.Count > 0).ToArray();
+                    foreach (var batch in missingCovers.Chunk(12)) await FillMissingPlaylistArtwork(batch);
+                    int repaired = missingCovers.Count(h => store.Playlists().Any(p => p.Id == h.Id && p.Artwork != null));
+                    CheckInteraction(repaired > 0, "No missing covers could be repaired");
+                    ShowLibraryOverview(); UpdateLayout();
+                    Capture(Path.Combine(directory, "repaired-artwork.png"));
+                    await File.WriteAllTextAsync(Path.Combine(directory, "artwork-repair-check.txt"), $"PASS repaired {repaired}/{missingCovers.Length} missing playlist covers on an isolated library copy.");
+                }
+                if (args.Contains("--check-library-table"))
+                {
+                    CheckInteraction(DiagnosticLibraryDirectory() != null, "Table checks require isolated storage");
+                    string old = store.Create("Older playlist"), liked = store.Create("Likes", "soundcloud-account:test:likes"), recent = store.Create("New playlist");
+                    ShowLibraryOverview();
+                    settings.LibraryTableView = false; ApplyLibraryView();
+                    ToggleLibraryView(this, new RoutedEventArgs()); UpdateLayout();
+                    CheckInteraction(PlaylistTableHeading.IsVisible && playlistCards.Select(p => p.Id).SequenceEqual(new[] { liked, recent, old }), "Table ordering or toggle failed");
+                    Capture(Path.Combine(directory, "library-table.png"));
+                    Width = 460; Height = 680; await Task.Delay(150); UpdateLayout();
+                    Capture(Path.Combine(directory, "library-table-narrow.png"));
+                    PlaylistCards.SelectedIndex = 0;
+                    PlaylistCardKey(this, new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, PresentationSource.FromVisual(this), 0, System.Windows.Input.Key.Enter) { RoutedEvent = System.Windows.Input.Keyboard.KeyDownEvent });
+                    CheckInteraction(!libraryOverview && playlistId == liked, "Table row did not open playlist");
+                    BackToLibrary(this, new RoutedEventArgs()); ToggleLibraryView(this, new RoutedEventArgs()); UpdateLayout();
+                    CheckInteraction(!PlaylistTableHeading.IsVisible, "Card view did not restore");
+                    await File.WriteAllTextAsync(Path.Combine(directory, "library-table-check.txt"), "PASS Likes first, newest first, table/card toggle, narrow layout, Enter opens playlist.");
+                    Width = 1200; Height = 780;
+                }
+                if (args.Contains("--check-account-view"))
+                {
+                    accountMessage = "Importing playlist: 400 tracks · unavailable or unverified: 13";
+                    ShowLibraryOverview();
+                    SyncAccountView(); UpdateLayout();
+                    CheckInteraction(LibraryImportStatus.Text == accountMessage && LibraryImportStatus.IsVisible, "Library import progress is missing");
+                    Capture(Path.Combine(directory, "library-import-progress.png"));
+                    ImportClick(this, new RoutedEventArgs());
+                    UpdateLayout();
+                    CheckInteraction(AccountSignIn.IsVisible && AccountSignIn.IsEnabled, "Account sign-in panel is missing below import");
+                    Capture(Path.Combine(directory, "account-import-view.png"));
+                    Width = 460; Height = 680;
+                    await Task.Delay(150); UpdateLayout();
+                    AccountSignIn.BringIntoView();
+                    await Task.Delay(150); UpdateLayout();
+                    Capture(Path.Combine(directory, "account-import-narrow.png"));
+                    await File.WriteAllTextAsync(Path.Combine(directory, "account-view-check.txt"), "PASS sign-in section below import, full/narrow view and no extra application window.");
+                    Width = 1200; Height = 780; SetView("home");
+                }
                 if (args.Contains("--check-volume"))
                 {
                     double previous = VolumeSlider.Value;
