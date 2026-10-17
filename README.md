@@ -4,7 +4,7 @@
 
 # DIPlayer
 
-**Your SoundCloud tracks. Your playlists. Your desktop.**
+**Most optimizing player for Desktop. From Gamer. For Gamers.**
 
 **A SoundCloud player for gamers, designed to keep resource use low while you play.**
 
