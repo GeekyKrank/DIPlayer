@@ -6,7 +6,7 @@
 
 **Most optimizing player for Desktop. From Gamer. For Gamers.**
 
-**A SoundCloud player for gamers, designed to keep resource use low while you play.**
+**A SoundCloud player, designed to keep resource use low while you play.**
 
 A standalone Windows app with a dark interface, local playlists and a compact mini player.
 
