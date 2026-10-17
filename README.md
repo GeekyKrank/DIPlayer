@@ -33,6 +33,17 @@ A standalone Windows app with a dark interface, local playlists and a compact mi
 <img src="docs/screenshots/mini-player.png" width="400" alt="DIPlayer mini player with artwork and playback controls">
 </div>
 
+### A small footprint
+
+<table>
+<tr><th align="left">DIPlayer — standalone music player</th></tr>
+<tr><td><img src="docs/screenshots/memory-diplayer.png" width="704" alt="Windows Task Manager: DIPlayer using 49.0 MB of memory and 0% CPU"></td></tr>
+<tr><th align="left">Thorium — optimized browser with one SoundCloud tab</th></tr>
+<tr><td><img src="docs/screenshots/memory-soundcloud-browser.png" width="704" alt="Windows Task Manager: Thorium process group using 821.2 MB of memory and 2.7% CPU"></td></tr>
+</table>
+
+User-provided Task Manager snapshots: **49.0 MB** for DIPlayer and **821.2 MB** for the Thorium process group. The browser had one SoundCloud tab open. These are individual snapshots; usage varies with playback, workload and configuration.
+
 ### Get started
 
 1. **Install** using the EXE above, or extract the entire portable ZIP. No separate .NET installation needed.
