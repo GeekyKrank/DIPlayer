@@ -54,6 +54,20 @@ public sealed class PlaybackQueue
     public List<Track> Tracks { get; } = [];
     public int Index { get; set; } = -1;
     public Track? Current => Index >= 0 && Index < Tracks.Count ? Tracks[Index] : null;
+    public async Task<bool> PlayAvailable(Track first, int direction, bool repeatAll, bool shuffle, Func<Track, Task<bool>> tryPlay, CancellationToken ct)
+    {
+        var visited = new HashSet<string>();
+        Track? candidate = first;
+        int limit = Tracks.Count + 1;
+        for (int i = 0; i < limit && candidate != null; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (visited.Add(candidate.Id) && await tryPlay(candidate)) return true;
+            ct.ThrowIfCancellationRequested();
+            candidate = Navigate(direction, repeatAll, shuffle);
+        }
+        return false;
+    }
     public void Add(Track t)
     {
         if (Tracks.Count >= 1000)

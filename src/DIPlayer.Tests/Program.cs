@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Net.Http;
 using DIPlayer.Core;
 using System.IO;
 using DIPlayer.Storage;
@@ -89,6 +91,29 @@ using(var dates=new LibraryStore(dateFolder))
 }
 using(var dates=new LibraryStore(dateFolder))
  Check(dates.Playlists(true).Select(p=>p.Id).SequenceEqual(new[]{favorites,older,newer}),"creation-date sorting survives restart");
+foreach(bool shuffledMode in new[]{false,true})
+{
+ var skipping=new PlaybackQueue();
+ skipping.Tracks.AddRange(Enumerable.Range(0,5).Select(i=>track with{Id="skip-"+i,Access=i==3?"playable":"blocked"}));
+ skipping.Index=0;
+ var attempted=new List<string>();
+ bool ok=await skipping.PlayAvailable(skipping.Current!,1,true,shuffledMode,t=>{attempted.Add(t.Id);return Task.FromResult(t.Access=="playable");},default);
+ Check(ok && skipping.Current?.Id=="skip-3" && attempted.Distinct().Count()==attempted.Count,"blocked tracks are skipped in "+(shuffledMode?"shuffle":"ordered")+" playback");
+ foreach(var t in skipping.Tracks.ToArray()) skipping.Tracks[skipping.Tracks.IndexOf(t)]=t with{Access="blocked"};
+ int attempts=0;
+ Check(!await skipping.PlayAvailable(skipping.Current!,1,true,shuffledMode,t=>{attempts++;return Task.FromResult(false);},default) && attempts<=5,"all-blocked repeat queue stops after bounded attempts");
+ bool networkFailed=false;
+ try{await skipping.PlayAvailable(skipping.Current!,1,true,shuffledMode,t=>throw new HttpRequestException("offline"),default);}catch(HttpRequestException){networkFailed=true;}
+ Check(networkFailed,"network failures are not silently treated as blocked tracks");
+}
+Check(ReleaseUpdates.Compare("v0.3.1-alpha","0.3.0-alpha")>0 && ReleaseUpdates.Compare("v0.3.1","0.3.1-alpha")>0 && ReleaseUpdates.Compare("0.3.1-alpha.10","0.3.1-alpha.2")>0,"update comparison handles patch, stable and numeric prereleases");
+using(var releases=JsonDocument.Parse("""[{"draft":false,"tag_name":"v0.3.1-alpha","html_url":"https://evil.test"},{"draft":true,"tag_name":"v9.0.0"},{"draft":false,"tag_name":"not-a-version"},{"draft":false,"tag_name":"v0.3.0-alpha"}]"""))
+{
+ var update=ReleaseUpdates.Find(releases.RootElement,"0.3.0-alpha");
+ Check(update?.Tag=="v0.3.1-alpha" && update.Url=="https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.3.1-alpha","published alpha update uses trusted GitHub link and ignores drafts/invalid tags");
+ Check(ReleaseUpdates.Find(releases.RootElement,"0.3.1-alpha+build123")==null,"same installed version never shows an update");
+ Check(ReleaseUpdates.Find(releases.RootElement,"0.4.0-alpha")==null,"older releases never prompt a downgrade");
+}
 Console.WriteLine("All integration checks passed");
 if(args.Contains("--network"))
 {

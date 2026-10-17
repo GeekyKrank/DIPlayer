@@ -10,9 +10,9 @@
 
 A standalone Windows app with a dark interface, local playlists and a compact mini player.
 
-[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.3.0-alpha/DIPlayer-Setup-0.3.0-alpha-x64.exe) [![Version](https://img.shields.io/badge/RELEASE-0.3.0_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.3.0-alpha)
+[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.3.1-alpha/DIPlayer-Setup-0.3.1-alpha-x64.exe) [![Version](https://img.shields.io/badge/RELEASE-0.3.1_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.3.1-alpha)
 
-[Portable ZIP](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.3.0-alpha/DIPlayer-win-x64.zip) · [All releases](https://github.com/GeekyKrank/DIPlayer/releases) · [Report an issue](https://github.com/GeekyKrank/DIPlayer/issues)
+[Portable ZIP](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.3.1-alpha/DIPlayer-win-x64.zip) · [All releases](https://github.com/GeekyKrank/DIPlayer/releases) · [Report an issue](https://github.com/GeekyKrank/DIPlayer/issues)
 
 </div>
 
@@ -54,7 +54,7 @@ User-provided Task Manager snapshots: **49.0 MB** for DIPlayer and **821.2 MB** 
 
 ### A few things to know
 
-- Tested on **Windows 11 x64**. This is an unsigned alpha; automatic updates are not included.
+- Tested on **Windows 11 x64**. This is an unsigned alpha; a button links to new GitHub releases; installation remains manual.
 - Internet and the shared catalog are required. Some SoundCloud tracks are unavailable to external players; private playlists and access restrictions are not bypassed.
 - Audio uses bounded streaming buffers. Earlier measurements are documented; the current version has **not** completed a new one-hour RAM/CPU run.
 

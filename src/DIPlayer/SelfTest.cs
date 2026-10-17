@@ -48,6 +48,19 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-update-view"))
+                {
+                    ShowUpdate(new UpdateRelease("v0.3.2-alpha", "https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.3.2-alpha"));
+                    UpdateLayout();
+                    CheckInteraction(UpdateButton.IsVisible && UpdateButton.ActualWidth > 60, "Update button missing");
+                    Capture(Path.Combine(directory,"update-button.png"));
+                    Width=460; Height=680; await Task.Delay(100); UpdateLayout();
+                    CheckInteraction(UpdateButton.IsVisible && MaximizeButton.IsVisible, "Narrow update/caption controls missing");
+                    Capture(Path.Combine(directory,"update-button-narrow.png"));
+                    ShowUpdate(null); CheckInteraction(UpdateButton.Visibility==Visibility.Collapsed,"Update button did not hide");
+                    await File.WriteAllTextAsync(Path.Combine(directory,"update-view-check.txt"),"PASS white update button, wide/narrow layout and hidden state.");
+                    Width=1200; Height=780;
+                }
                 if (args.Contains("--check-repair-artwork"))
                 {
                     CheckInteraction(DiagnosticLibraryDirectory() != null, "Artwork checks require isolated storage");

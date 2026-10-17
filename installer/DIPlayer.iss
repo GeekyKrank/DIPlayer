@@ -1,4 +1,4 @@
-#define AppVersion "0.3.0-alpha"
+#define AppVersion "0.3.1-alpha"
 #define RepoRoot AddBackslash(SourcePath) + ".."
 
 [Setup]

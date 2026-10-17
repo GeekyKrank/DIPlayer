@@ -73,6 +73,7 @@ public partial class MainWindow : Window
             Connect();
             RefreshPlaylists();
             if (!args.Contains("--selftest")) LibraryView(this, new RoutedEventArgs());
+            if (!args.Contains("--selftest")) _ = CheckForUpdates();
             int qi = Array.IndexOf(args, "--search");
             if (qi >= 0 && qi + 1 < args.Length)
                 SearchBox.Text = args[qi + 1];
@@ -162,6 +163,7 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        navigationCancel?.Cancel();
         libraryArtworkCancel?.Cancel();
         miniPlayer?.Close();
         timer.Stop();
@@ -503,7 +505,22 @@ public partial class MainWindow : Window
         queue.Tracks.Clear(); queue.Tracks.AddRange(context.Select(r => r.Track)); queue.Index = target;
         SyncMiniPlayer();
     }
-    async Task Play(Track track, double position = 0)
+    async Task Play(Track track, double position = 0, int direction = 1)
+    {
+        navigationCancel?.Cancel();
+        navigationCancel = new();
+        var ct = navigationCancel.Token;
+        bool first = true;
+        bool played = await queue.PlayAvailable(track, direction, settings.RepeatMode == 1, settings.Shuffle, candidate =>
+        {
+            double start = first ? position : 0;
+            first = false;
+            return TryPlayCandidate(candidate, start);
+        }, ct);
+        if (!played && !ct.IsCancellationRequested) SetStatus("No more playable tracks in the queue.");
+    }
+    CancellationTokenSource? navigationCancel;
+    async Task<bool> TryPlayCandidate(Track track, double position)
     {
         playCancel?.Cancel();
         playCancel = new();
@@ -513,13 +530,42 @@ public partial class MainWindow : Window
         RefreshCurrent();
         SetStatus("Checking availability and loading stream…");
         await player.Stop();
-        await Guard(async () => { if (track.Access == "unknown") { track = await Catalog().GetTrack(track.Id, ct); ct.ThrowIfCancellationRequested(); current = track; Remember(track); RefreshCurrent(); } var url = await Catalog().Stream(track.Id, ct); ct.ThrowIfCancellationRequested(); if (generation != playGeneration) return; await player.Open(url, ct, position); windows?.Track(track.Title); SetStatus(""); });
+        try
+        {
+            if (track.Access == "unknown") track = metadata.GetValueOrDefault(track.Id) ?? await Catalog().GetTrack(track.Id, ct);
+            ct.ThrowIfCancellationRequested();
+            if (track.Access is "blocked" or "preview" || track.Issue == "Track details unavailable")
+            {
+                MarkUnavailable(track);
+                return false;
+            }
+            var url = await Catalog().Stream(track.Id, ct);
+            ct.ThrowIfCancellationRequested();
+            if (generation != playGeneration) throw new OperationCanceledException(ct);
+            current = track; Remember(track); RefreshCurrent();
+            await player.Open(url, ct, position);
+            windows?.Track(track.Title); SetStatus("");
+            return true;
+        }
+        catch (CatalogException error) when (error.Status is 403 or 404 or 410 || error.Message == "This track is unavailable outside SoundCloud; no reason was provided." || error.Message == "This track has no supported MP3 HLS stream. AAC is not supported yet.")
+        {
+            ct.ThrowIfCancellationRequested();
+            MarkUnavailable(track with { Access = "blocked", Issue = "Unavailable in DIPlayer" });
+            return false;
+        }
+    }
+    void MarkUnavailable(Track track)
+    {
+        track = track with { Issue = track.Access == "preview" ? "Full track unavailable in DIPlayer · preview only" : "Unavailable in DIPlayer" };
+        Remember(track);
+        for (int i = 0; i < queue.Tracks.Count; i++) if (queue.Tracks[i].Id == track.Id) queue.Tracks[i] = track;
+        for (int i = 0; i < rows.Count; i++) if (rows[i].Track.Id == track.Id) rows[i] = rows[i] with { Track = track };
     }
     async Task Advance(int direction, bool automatic = false)
     {
         var track = automatic && settings.RepeatMode == 2 && current != null ? current : queue.Navigate(direction, settings.RepeatMode == 1, settings.Shuffle);
         if (track != null)
-            await Play(track);
+            await Guard(() => Play(track, 0, direction));
         else
             SetStatus(direction > 0 ? "End of queue" : "Start of queue");
     }

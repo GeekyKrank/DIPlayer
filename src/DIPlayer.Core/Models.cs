@@ -6,7 +6,7 @@ public sealed record Track(string Id, string Title, string Artist, long Duration
 {
     public string Duration => TimeSpan.FromMilliseconds(DurationMs).ToString(DurationMs >= 3600000 ? @"h\:mm\:ss" : @"m\:ss");
     public string Description => $"{Artist}  ·  {Duration}";
-    public string Availability => Issue ?? (Access == "preview" ? "Preview only" : Access == "blocked" ? "Unavailable: no reason provided" : "");
+    public string Availability => Issue ?? (Access == "preview" ? "Preview only" : Access == "blocked" ? "Unavailable in DIPlayer" : "");
 }
 public sealed record TrackPage(List<Track> Tracks, string? Next);
 public sealed record PlaylistInfo(string Id, string Title, int Count, bool Public, string? Artwork = null, string? CreatedAt = null);
