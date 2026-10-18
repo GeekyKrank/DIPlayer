@@ -3,6 +3,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
+    & (Join-Path $PSScriptRoot 'Prepare-BrowserBlocker.ps1')
     $dotnet=if(Test-Path '.tools/dotnet/dotnet.exe'){Join-Path $root '.tools/dotnet/dotnet.exe'}else{'dotnet'}
     & $dotnet run --project src/DIPlayer.Tests -c Release --artifacts-path .tools/check-artifacts
     if($LASTEXITCODE -ne 0){throw 'Integration checks failed'}

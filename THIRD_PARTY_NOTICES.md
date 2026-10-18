@@ -2,6 +2,8 @@
 
 DIPlayer source was written independently. The SoundCloud-Desktop repository was read for architectural research; its code was not imported.
 
+- Microsoft.Web.WebView2 1.0.4258.31 — Microsoft WebView2 SDK license: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31/license . Browser mode requires the separately installed Microsoft Edge WebView2 Runtime.
+- uBO Lite 2026.1012.1545 (unmodified Edge extension archive) — GPL-3.0; license included in the archive. Official source and releases: https://github.com/uBlockOrigin/uBOL-home and https://github.com/gorhill/uBlock . Pinned package SHA-256: f2ff2b53deb4fba68e9f2898ac8d21d0c26b7a169655647ee34b0a59783c628e . Runs only in browser mode.
 - NAudio 2.2.1 — MIT: https://github.com/naudio/NAudio/blob/master/license.txt
 - Microsoft.Data.Sqlite 10.0.13 — MIT: https://github.com/dotnet/efcore/blob/main/LICENSE.txt
 - SQLitePCLRaw 3.0.5 — Apache-2.0: https://github.com/ericsink/SQLitePCL.raw/blob/master/LICENSE.TXT

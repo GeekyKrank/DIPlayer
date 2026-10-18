@@ -114,6 +114,8 @@ using(var releases=JsonDocument.Parse("""[{"draft":false,"tag_name":"v0.3.1-alph
  Check(ReleaseUpdates.Find(releases.RootElement,"0.3.1-alpha+build123")==null,"same installed version never shows an update");
  Check(ReleaseUpdates.Find(releases.RootElement,"0.4.0-alpha")==null,"older releases never prompt a downgrade");
 }
+Check(BrowserAdFilter.Block("https://googleads.g.doubleclick.net/pagead/ad") && BrowserAdFilter.Block("https://music.youtube.com/api/stats/ads?x=1"),"browser ad filter blocks ad hosts and YouTube ad requests");
+Check(!BrowserAdFilter.Block("https://music.youtube.com/search?q=music") && !BrowserAdFilter.Block("https://rr1.googlevideo.com/videoplayback") && !BrowserAdFilter.Block("https://accounts.google.com/") && !BrowserAdFilter.Block("https://doubleclick.net.evil.test/"),"browser filter preserves search, audio, sign-in and exact hostname boundaries");
 Console.WriteLine("All integration checks passed");
 if(args.Contains("--network"))
 {

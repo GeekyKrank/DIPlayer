@@ -48,6 +48,8 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-youtube-native")) await VerifyYouTubeNative(directory);
+                if (args.Contains("--check-browser-mode")) await VerifyBrowserMode(directory);
                 if (args.Contains("--check-update-view"))
                 {
                     ShowUpdate(new UpdateRelease("v0.3.2-alpha", "https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.3.2-alpha"));
@@ -162,7 +164,8 @@ public partial class MainWindow
                     var typeface = new Typeface(BrandTitle.FontFamily, BrandTitle.FontStyle, BrandTitle.FontWeight, BrandTitle.FontStretch);
                     if (!typeface.TryGetGlyphTypeface(out var glyphs) || !glyphs.FamilyNames.Values.Contains("Dirty Stains"))
                         throw new Exception("Dirty Stains was not resolved; a fallback font would be displayed");
-                    await File.WriteAllTextAsync(Path.Combine(directory, "brand-font-check.txt"), "PASS Dirty Stains resolves to the actual local font; title size=" + BrandTitle.FontSize);
+                    CheckInteraction(BrandLogo.Source is DrawingImage && BrandLogo.IsVisible && !BrandTitle.IsVisible, "Logo is not rendering the actual font glyphs");
+                    await File.WriteAllTextAsync(Path.Combine(directory, "brand-font-check.txt"), "PASS Dirty Stains resolves to the actual local font and renders its glyphs directly; title size=" + BrandTitle.FontSize);
                 }
                 if (args.Contains("--check-corners"))
                 {
@@ -337,7 +340,7 @@ public partial class MainWindow
             };
             await File.WriteAllTextAsync(Path.Combine(directory, "app-selftest.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch (Exception e) { await File.WriteAllTextAsync(Path.Combine(directory, "app-selftest-error.txt"), e.GetType().Name + ": " + e.Message); }
+        catch (Exception e) { await File.WriteAllTextAsync(Path.Combine(directory, "app-selftest-error.txt"), e.ToString()); }
         Exit();
     }
     void Capture(string file)

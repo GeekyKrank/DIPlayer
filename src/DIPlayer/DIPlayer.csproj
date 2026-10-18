@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
- <PropertyGroup><Version>0.3.1-alpha</Version><AssemblyVersion>0.3.1.0</AssemblyVersion><FileVersion>0.3.1.0</FileVersion><Product>DIPlayer</Product></PropertyGroup>
+ <PropertyGroup><Version>0.4.0-alpha</Version><AssemblyVersion>0.4.0.0</AssemblyVersion><FileVersion>0.4.0.0</FileVersion><Product>DIPlayer</Product></PropertyGroup>
  <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>disable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>DIPlayer</AssemblyName><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/diplayer.ico</ApplicationIcon></PropertyGroup>
  <ItemGroup><ProjectReference Include="../DIPlayer.Audio/DIPlayer.Audio.csproj"/><PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13"/><PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5"/></ItemGroup>
+ <ItemGroup><PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31"/></ItemGroup>
+ <ItemGroup><Content Include="../../.tools/browser-extension/uBOLite-2026.1012.1545.edge.zip" Link="Browser/uBOLite.zip" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../.tools/browser-extension/uBOLite-2026.1012.1545.edge.zip')"/></ItemGroup>
  <ItemGroup><Resource Include="Assets/soundcloud-white.png"/><Resource Include="Assets/wallpaper.jpg"/><Resource Include="Assets/bulldog-logo.png"/><Resource Include="Assets/diplayer.ico"/></ItemGroup>
  <!-- Keep the window icon as a WPF Resource. Content would make WPF look for
       Assets/diplayer.ico on disk instead of using the embedded resource. -->

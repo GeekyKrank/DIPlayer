@@ -40,9 +40,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SyncPlaybackModes();
-        string localFonts = Path.Combine(LibraryStore.DataDirectory, "fonts");
-        if (File.Exists(Path.Combine(localFonts, "DirtyStains-DEMO.otf")))
-            BrandTitle.FontFamily = new System.Windows.Media.FontFamily(new Uri(localFonts + Path.DirectorySeparatorChar), "./#Dirty Stains");
+        LoadBrandLogo();
         WindowFrame.SizeChanged += (_, _) => UpdateWindowCorners();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(UpdateWindowCorners);
         Tracks.ItemsSource = rows;
@@ -51,7 +49,7 @@ public partial class MainWindow : Window
         player.Volume = (float)settings.Volume;
         timer.Tick += (_, _) => RefreshPosition();
         player.Error += message => Dispatcher.BeginInvoke(() => SetStatus(message));
-        player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && generation == playGeneration) await Guard(() => Advance(1, true)); }); };
+        player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && !browserMode && generation == playGeneration) await Guard(() => Advance(1, true)); }); };
         Loaded += async (_, _) =>
         {
             // Loaded can fire again after a hidden WPF window is attached to its presentation source.
@@ -74,6 +72,7 @@ public partial class MainWindow : Window
             RefreshPlaylists();
             if (!args.Contains("--selftest")) LibraryView(this, new RoutedEventArgs());
             if (!args.Contains("--selftest")) _ = CheckForUpdates();
+            if (!args.Contains("--selftest") && settings.YouTubeBrowserMode) await ApplyBrowserMode(true);
             int qi = Array.IndexOf(args, "--search");
             if (qi >= 0 && qi + 1 < args.Length)
                 SearchBox.Text = args[qi + 1];
@@ -114,7 +113,7 @@ public partial class MainWindow : Window
     void SourceReady(object? sender, EventArgs e)
     {
         UpdateWindowCorners();
-        windows = new WindowsIntegration(this, id => Dispatcher.BeginInvoke(async () => { if (id == 0) await Guard(TogglePlayback); else if (id == 1) await Advance(1); else if (id == 2) await Advance(-1); else await player.Stop(); }), () => Dispatcher.BeginInvoke(Exit), () => { playCancel?.Cancel(); player.Pause(); SetStatus("Windows is going to sleep. Press Retry after waking. "); }, () => SetStatus("Windows has resumed. Press Retry to reconnect the stream."), async () => { if (quitting || current == null) return; bool paused = player.Paused; double position = player.Position; await Guard(() => Play(current, position)); if (paused) player.Pause(); });
+        windows = new WindowsIntegration(this, id => Dispatcher.BeginInvoke(async () => { if (browserMode) { await Guard(() => BrowserMedia(id)); return; } if (id == 0) await Guard(TogglePlayback); else if (id == 1) await Advance(1); else if (id == 2) await Advance(-1); else await player.Stop(); }), () => Dispatcher.BeginInvoke(Exit), () => { playCancel?.Cancel(); player.Pause(); SetStatus("Windows is going to sleep. Press Retry after waking. "); }, () => SetStatus("Windows has resumed. Press Retry to reconnect the stream."), async () => { if (quitting || browserMode || current == null) return; bool paused = player.Paused; double position = player.Position; await Guard(() => Play(current, position)); if (paused) player.Pause(); });
         if (!windows.AllKeysRegistered)
             SetStatus("Some media keys are used by another app. Use the player controls.");
         if (!windows.TrayAvailable)
@@ -134,7 +133,7 @@ public partial class MainWindow : Window
             RefreshPosition();
             SyncImportView();
             RefreshImportedLibrary();
-            if (view == "library" && libraryOverview) ShowLibraryOverview();
+            if (!browserMode && view == "library" && libraryOverview) ShowLibraryOverview();
             if (rows.Any(r => r.Track.Access == "unknown"))
                 _ = HydrateRows();
         }
@@ -163,6 +162,8 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        browserGeneration++;
+        DisposeMusicBrowser();
         navigationCancel?.Cancel();
         libraryArtworkCancel?.Cancel();
         miniPlayer?.Close();
@@ -180,7 +181,7 @@ public partial class MainWindow : Window
         await player.Stop();
         player.Dispose();
         settings.Volume = VolumeSlider.Value;
-        settings.Save();
+        if (DiagnosticLibraryDirectory() == null) settings.Save();
         store.SaveQueue(queue.Tracks);
         store.Dispose();
         (catalog as IDisposable)?.Dispose();
@@ -230,6 +231,7 @@ public partial class MainWindow : Window
     void SetView(string value)
     {
         CloseActionPanel(false);
+        SettingsPanel.Visibility = Visibility.Collapsed;
         if (view == "queue" && value != "queue") queueReturnView = null;
         view = value;
         HomePanel.Visibility = value == "home" ? Visibility.Visible : Visibility.Collapsed;
@@ -646,7 +648,11 @@ public partial class MainWindow : Window
                 NowArtwork.Url = current.Artwork;
         }
     }
-    void HomeView(object s, RoutedEventArgs e) => LibraryView(s, e);
+    void HomeView(object s, RoutedEventArgs e)
+    {
+        if (browserMode) { SettingsPanel.Visibility = Visibility.Collapsed; ShowYouTubeNative(); YouTubeHomeClick(s,e); }
+        else LibraryView(s,e);
+    }
     void MinimizeClick(object s, RoutedEventArgs e) { WindowState = WindowState.Minimized; if (windows?.TrayAvailable != false) Hide(); ShowMiniPlayer(); }
     void MaximizeClick(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     void CloseClick(object s, RoutedEventArgs e) => Close();

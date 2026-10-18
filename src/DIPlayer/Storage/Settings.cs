@@ -18,6 +18,7 @@ public sealed class Settings
     public int RepeatMode { get; set; }
     public bool Shuffle { get; set; }
     public bool OldestPlaylistsFirst { get; set; }
+    public bool YouTubeBrowserMode { get; set; }
     static string FilePath => Path.Combine(LibraryStore.DataDirectory, "settings.json");
     public static Settings Load()
     {
