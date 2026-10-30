@@ -24,7 +24,7 @@ public partial class MainWindow
     {
         if (youtubeOpeningCollection || musicBrowser?.CoreWebView2 == null) return;
         if (item.Kind == "Track") { await PlayYouTubeKey(item.Key); return; }
-        if (item.Kind == "Browse") { await NavigateYouTube(item.Key, item.Title); return; }
+        if (item.Kind is "Browse" or "Artist") { await NavigateYouTube(item.Key, item.Title); return; }
         int generation = browserGeneration;
         youtubeOpeningCollection = true;
         YouTubeStatus.Text = "Loading " + item.Title + "…";
@@ -74,6 +74,8 @@ public partial class MainWindow
             youtubeKeepCards = true;
             youtubeItems.Clear(); foreach (var track in tracks) youtubeItems.Add(track);
             YouTubeHeading.Text = item.Kind == "Album" ? "Album" : "Playlist";
+            youtubeCollectionArtistName=detail.Page?.ArtistName;
+            YouTubeCollectionDescription.Text = detail.Page?.Description??"";
             YouTubeCollectionTitle.Text = detail.Page?.Title is { Length: > 0 } title ? title : item.Title;
             YouTubeCollectionSubtitle.Text = item.Subtitle + " · " + tracks.Length + " tracks";
             YouTubeCollectionArtwork.Url = detail.Page?.Artwork is string art && art.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? art : item.Artwork;

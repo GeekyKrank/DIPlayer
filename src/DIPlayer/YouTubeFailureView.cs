@@ -9,7 +9,7 @@ public partial class MainWindow
         if (!browserMode || quitting) return;
         youtubeTimer.Stop();
         YouTubeTransport.IsEnabled = YouTubeVolume.IsEnabled = YouTubePosition.IsEnabled = false;
-        YouTubePlay.Content = "\uE768";
+        YouTubePlay.Content = UI.Symbols.Play;
         youtubeWebsiteVisible = false;
         BrowserPanel.Visibility = Visibility.Collapsed;
         BrowserToolbar.Visibility = BrowserNotice.Visibility = Visibility.Collapsed;

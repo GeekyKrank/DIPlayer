@@ -6,13 +6,13 @@ public partial class MainWindow
 {
     sealed record YouTubeNavigationEntry(YouTubeItem[] Items, string Heading, string Url,
         YouTubeItem? Collection, string Title, string Subtitle, string? Artwork,
-        bool Queue, double CardsOffset, double ShelvesOffset);
+        bool Queue, double CardsOffset, double ShelvesOffset, YouTubePage? ArtistPage, string Description, string? CollectionArtist);
     readonly List<YouTubeNavigationEntry> youtubeHistory = [];
 
     YouTubeNavigationEntry CaptureYouTubeView() => new(youtubeItems.ToArray(), YouTubeHeading.Text,
         youtubeDisplayedUrl, youtubeCollection, YouTubeCollectionTitle.Text,
         YouTubeCollectionSubtitle.Text, YouTubeCollectionArtwork.Url, youtubeQueueView,
-        YouTubeCardsScroll.VerticalOffset, YouTubeShelvesScroll.VerticalOffset);
+        YouTubeCardsScroll.VerticalOffset, YouTubeShelvesScroll.VerticalOffset,youtubeArtistPage,YouTubeCollectionDescription.Text,youtubeCollectionArtistName);
 
     void RememberYouTubeView(YouTubeNavigationEntry previous)
     {
@@ -40,17 +40,21 @@ public partial class MainWindow
     void YouTubeCollectionBack(object sender, RoutedEventArgs e)
     {
         if (youtubeOpeningCollection || youtubeHistory.Count == 0) return;
+        ClosePlaybackPanelsForNavigation();
         var previous = youtubeHistory[^1];
         youtubeHistory.RemoveAt(youtubeHistory.Count - 1);
         youtubeKeepCards = true;
         youtubeExpectedRoute = null;
         youtubeCollection = previous.Collection;
+        youtubeArtistPage = previous.ArtistPage;
+        youtubeCollectionArtistName=previous.CollectionArtist;
         youtubeQueueView = previous.Queue;
         youtubeItems.Clear();
         if (previous.Queue) foreach (var track in youtubeQueue.Tracks) youtubeItems.Add(new(track.Id, track.Title, track.Artist, track.Artwork, "Track"));
         else foreach (var item in previous.Items) youtubeItems.Add(item);
         YouTubeHeading.Text = previous.Heading;
         YouTubeCollectionTitle.Text = previous.Title;
+        YouTubeCollectionDescription.Text=previous.Description;
         YouTubeCollectionSubtitle.Text = previous.Subtitle;
         YouTubeCollectionArtwork.Url = previous.Artwork;
         UpdateYouTubeShelves(previous.Url);

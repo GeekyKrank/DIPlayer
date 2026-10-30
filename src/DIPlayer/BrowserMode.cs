@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using DIPlayer.Core;
@@ -13,6 +14,7 @@ public partial class MainWindow
     int browserGeneration;
     void OpenPlayerSettings(object sender, RoutedEventArgs e)
     {
+        UpdateMemoryCacheStatus();
         if (browserMode && musicBrowser?.CoreWebView2 != null) ParkYouTubeBrowser();
         else BrowserPanel.Visibility = Visibility.Collapsed;
         YouTubeNativePanel.Visibility = Visibility.Collapsed;
@@ -31,6 +33,8 @@ public partial class MainWindow
     async Task ApplyBrowserMode(bool enabled)
     {
         int generation = ++browserGeneration;
+        youtubeMenuOpen=false; YouTubeActionsOverlay.Visibility=Visibility.Collapsed;
+        StopYouTubeLyrics();
         YouTubeFailure.Visibility = Visibility.Collapsed;
         YouTubeTransport.IsEnabled = YouTubeVolume.IsEnabled = true;
         browserMode = enabled;
@@ -72,13 +76,17 @@ public partial class MainWindow
         browser.LayoutUpdated += (_, _) => ClipYouTubeHost();
         BrowserHost.Child = browser;
         ShowYouTubeNative();
+        string startupStage="browser environment";
         try
         {
-            string profile = Path.Combine(DiagnosticLibraryDirectory() ?? LibraryStore.DataDirectory, "youtube-browser");
+            bool checkExisting=DiagnosticLibraryDirectory()!=null&&Environment.GetCommandLineArgs().Contains("--check-existing-youtube-profile");
+            string profile = Path.Combine(checkExisting?LibraryStore.DataDirectory:DiagnosticLibraryDirectory() ?? LibraryStore.DataDirectory, "youtube-browser");
             var environment = await CoreWebView2Environment.CreateAsync(null, profile, new CoreWebView2EnvironmentOptions { AreBrowserExtensionsEnabled = true, AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required" });
             if (!browserMode || generation != browserGeneration || quitting) return;
+            startupStage="WebView controller";
             await browser.EnsureCoreWebView2Async(environment);
             if (!browserMode || generation != browserGeneration || quitting) return;
+            startupStage="browser settings";
             var core = browser.CoreWebView2;
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
@@ -101,17 +109,20 @@ public partial class MainWindow
                 if (args.IsUserInitiated && Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) && uri.Scheme == "https") core.Navigate(args.Uri);
             };
             core.DownloadStarting += (_, args) => args.Cancel = true;
+            core.WindowCloseRequested += (_, _) => LogWindowTransition("Ignored browser close request");
             core.ProcessFailed += (_, args) =>
             {
                 if (generation == browserGeneration && args.ProcessFailedKind is CoreWebView2ProcessFailedKind.BrowserProcessExited or CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive) ShowYouTubeFailure("Playback was interrupted. Press Retry to reconnect; your account stays signed in.");
             };
-            core.NavigationCompleted += (_, args) =>
+            core.NavigationCompleted += async (_, args) =>
             {
                 if (generation != browserGeneration || browserConfiguringBlocker) return;
                 if (args.IsSuccess && Uri.TryCreate(core.Source,UriKind.Absolute,out var source))
                 {
                     if (source.Host=="music.youtube.com" && (!youtubeWebsiteVisible || youtubeReturningFromSignIn))
                     {
+                        await Guard(async () => { await core.ExecuteScriptAsync(YouTubeVolumeBridge.Install(settings.Volume)); });
+                        if (generation != browserGeneration || quitting) return;
                         youtubeReturningFromSignIn = false;
                         youtubeItemsSignature = "";
                         ShowYouTubeNative();
@@ -134,6 +145,7 @@ public partial class MainWindow
                 })();
                 """);
             await core.AddScriptToExecuteOnDocumentCreatedAsync(YouTubeEndedBridge);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(YouTubeVolumeBridge.Install(settings.Volume));
             core.WebMessageReceived += (_, message) =>
             {
                 if (!browserMode || quitting || generation != browserGeneration || !Uri.TryCreate(message.Source, UriKind.Absolute, out var source) || source.Host != "music.youtube.com") return;
@@ -144,16 +156,42 @@ public partial class MainWindow
                 }
                 catch (ArgumentException) { }
             };
-            string blocker = await Task.Run(() => BrowserBlocker.Prepare(DiagnosticLibraryDirectory() ?? LibraryStore.DataDirectory));
-            if (!browserMode || generation != browserGeneration || quitting) return;
-            var extension = await core.Profile.AddBrowserExtensionAsync(blocker);
-            if (!extension.IsEnabled) await extension.EnableAsync(true);
-            await ConfigureBrowserBlocker(core, extension.Id);
+            try
+            {
+                startupStage="ad filter package";
+                string blocker = await Task.Run(() => BrowserBlocker.Prepare(checkExisting?LibraryStore.DataDirectory:DiagnosticLibraryDirectory() ?? LibraryStore.DataDirectory));
+                if (!browserMode || generation != browserGeneration || quitting) return;
+                startupStage="ad filter registration";
+                var extensions=await core.Profile.GetBrowserExtensionsAsync();
+                var extension=extensions.FirstOrDefault(e=>e.Name.Contains("uBlock",StringComparison.OrdinalIgnoreCase));
+                if(extension==null)
+                {
+                    try { extension=await core.Profile.AddBrowserExtensionAsync(blocker); }
+                    catch(Exception registrationError) when(registrationError is System.Runtime.InteropServices.COMException or UnauthorizedAccessException or IOException)
+                    {
+                        LogBrowserStartupFailure(startupStage,registrationError);
+                        string repaired=await Task.Run(()=>BrowserBlocker.Prepare(checkExisting?LibraryStore.DataDirectory:DiagnosticLibraryDirectory()??LibraryStore.DataDirectory,true));
+                        extension=await core.Profile.AddBrowserExtensionAsync(repaired);
+                    }
+                }
+                if (!extension.IsEnabled) await extension.EnableAsync(true);
+                startupStage="ad filter configuration";
+                await ConfigureBrowserBlocker(core, extension.Id);
+            }
+            catch(Exception filterError) when(filterError is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or InvalidOperationException or TimeoutException or JsonException)
+            {
+                LogBrowserStartupFailure(startupStage,filterError);
+                browserBlockerDiagnostics="Filtering extension unavailable; basic request filtering remains active.";
+                browserConfiguringBlocker=false;
+                BrowserNotice.Text="YouTube Music · extension unavailable; basic filtering only";
+            }
+            startupStage="YouTube navigation";
             if (!browserMode || generation != browserGeneration || quitting) return;
             core.Navigate("https://music.youtube.com/");
         }
-        catch (Exception error) when (error is WebView2RuntimeNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException or IOException or ArgumentException or NotSupportedException or TimeoutException)
+        catch (Exception error) when (error is WebView2RuntimeNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or TimeoutException)
         {
+            LogBrowserStartupFailure(startupStage,error);
             if (generation == browserGeneration && !quitting)
             {
                 string message = error is WebView2RuntimeNotFoundException ? "Microsoft Edge WebView2 Runtime is required. Open Settings to install it, or switch to SC above." : "YouTube Music could not start. Press Retry or switch to SC above. Your saved account and libraries are preserved.";
@@ -164,6 +202,9 @@ public partial class MainWindow
     }
     void DisposeMusicBrowser()
     {
+        youtubeClippedHandle = IntPtr.Zero;
+        youtubeCatalogReadAt = DateTime.MinValue;
+        StopYouTubeLyrics();
         youtubeTimer.Stop();
         youtubeQueue.Tracks.Clear(); youtubeQueue.Index = -1; youtubeQueue.ResetNavigation(); youtubeQueueView = false; youtubeQueueCleared = false;
         youtubeExpectedRoute = null;

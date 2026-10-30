@@ -118,7 +118,7 @@ public partial class MainWindow
     }
     void ApplyLibraryView()
     {
-        PlaylistSortButton.Content = settings.OldestPlaylistsFirst ? "\uE74A" : "\uE74B";
+        PlaylistSortButton.Content = settings.OldestPlaylistsFirst ? UI.Symbols.SortUp : UI.Symbols.SortDown;
         PlaylistSortButton.ToolTip = settings.OldestPlaylistsFirst ? "Oldest playlists first · click for newest" : "Newest playlists first · click for oldest";
         System.Windows.Automation.AutomationProperties.SetName(PlaylistSortButton, (string)PlaylistSortButton.ToolTip);
         bool table = settings.LibraryTableView;
@@ -126,7 +126,7 @@ public partial class MainWindow
         PlaylistCards.ItemsPanel = (ItemsPanelTemplate)FindResource(table ? "PlaylistTablePanel" : "PlaylistCardPanel");
         PlaylistCards.ItemContainerStyle = (Style)FindResource(table ? "PlaylistTableItem" : "PlaylistCardItem");
         PlaylistTableHeading.Visibility = table ? Visibility.Visible : Visibility.Collapsed;
-        LibraryViewToggle.Content = table ? "\uE80A" : "\uE8FD";
+        LibraryViewToggle.Content = table ? UI.Symbols.Grid : UI.Symbols.List;
         LibraryViewToggle.ToolTip = table ? "Show playlist cards" : "Show playlist table";
         System.Windows.Automation.AutomationProperties.SetName(LibraryViewToggle, (string)LibraryViewToggle.ToolTip);
     }
@@ -155,7 +155,7 @@ public partial class MainWindow
         if (PlaylistSummary == null || LibraryBar == null) return;
         bool detail = view == "library" && !libraryOverview;
         PlaylistBack.Visibility = detail ? Visibility.Visible : Visibility.Collapsed;
-        SearchHeader.Margin = new Thickness(detail && ActualWidth < 950 ? 110 : 22, 6, 22, 12);
+        SearchHeader.Margin = new Thickness(detail && ActualWidth < 950 ? 110 : 22, 6, 130, 12);
         bool wide = detail && ActualWidth >= 950;
         TrackContent.Margin = new Thickness(0, wide ? 10 : 0, 0, 0);
         Heading.Visibility = wide ? Visibility.Collapsed : Visibility.Visible;

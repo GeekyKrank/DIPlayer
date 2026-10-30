@@ -19,6 +19,23 @@ public sealed class Settings
     public bool Shuffle { get; set; }
     public bool OldestPlaylistsFirst { get; set; }
     public bool YouTubeBrowserMode { get; set; }
+    public bool DiscordPresenceEnabled { get; set; } = true;
+    public string[] SearchHistorySC { get; set; } = [];
+    public string[] SearchHistoryYT { get; set; } = [];
+    public bool EqualizerEnabled { get; set; }
+    public double[] EqualizerGains { get; set; } = new double[6];
+    public bool EqualizerHeadroom { get; set; } = true;
+    public string EqualizerPresetName { get; set; } = "flat";
+    public bool MotionEnabled { get; set; } = true;
+    public bool SoftBackdrop { get; set; } = true;
+    public bool CloseToTray { get; set; } = true;
+    public bool MiniPlayerEnabled { get; set; } = true;
+    public bool RememberVolume { get; set; } = true;
+    public double StartupVolume { get; set; } = .6;
+    public int ArtworkQuality { get; set; }
+    public bool CompactRows { get; set; }
+    public bool ShowTrackStats { get; set; }
+    public Dictionary<string, double> LyricsOffsets { get; set; } = [];
     static string FilePath => Path.Combine(LibraryStore.DataDirectory, "settings.json");
     public static Settings Load()
     {

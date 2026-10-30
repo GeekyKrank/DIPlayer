@@ -69,6 +69,7 @@ public partial class MainWindow
     }
     void DisplayYouTubeQueue()
     {
+        ClosePlaybackPanelsForNavigation();
         RememberYouTubeView(CaptureYouTubeView());
         youtubeQueueView = true; YouTubeHeading.Text = "YouTube Music queue";
         SyncYouTubeNavigation();

@@ -15,6 +15,12 @@ public sealed class HlsPlayer : IDisposable
     Task? worker;
     WaveOutEvent? output;
     BufferedWaveProvider? pcm;
+    readonly object equalizerGate = new();
+    EqualizerSampleProvider? equalizer;
+    PlaybackMeter? playbackMeter;
+    bool equalizerEnabled;
+    bool equalizerHeadroom;
+    double[] equalizerGains = new double[EqualizerSampleProvider.BandCount];
     List<Segment> segments = [];
     bool disposed;
     volatile bool paused, faulted;
@@ -28,7 +34,19 @@ public sealed class HlsPlayer : IDisposable
     public double Duration { get; private set; }
     public double Position => Math.Clamp(origin + Interlocked.CompareExchange(ref decodedSeconds,0,0) - (pcm?.BufferedDuration.TotalSeconds ?? 0),0,Duration);
     public double BufferedSeconds => pcm?.BufferedDuration.TotalSeconds ?? 0;
+    public float VisualEnergy => Playing && !Paused ? playbackMeter?.Energy ?? 0 : 0;
     public float Volume { get => volume; set { volume=Math.Clamp(value,0,1); if(output != null) output.Volume=volume; } }
+    public void SetEqualizer(bool enabled, double[] gains, bool headroom = false)
+    {
+        var normalized = EqualizerSampleProvider.NormalizeGains(gains);
+        lock (equalizerGate)
+        {
+            equalizerEnabled = enabled;
+            equalizerHeadroom = headroom;
+            equalizerGains = normalized;
+            equalizer?.SetEqualizer(enabled, normalized, headroom);
+        }
+    }
     public async Task Open(string url, CancellationToken ct, double position=0)
     {
         var uri = new Uri(url);
@@ -73,7 +91,8 @@ public sealed class HlsPlayer : IDisposable
         lifetime?.Cancel();
         output?.Stop();
         if(worker!=null) { try { await worker; } catch(OperationCanceledException) {} }
-        output?.Dispose(); output=null;pcm=null;
+        output?.Dispose(); output=null;pcm=null;playbackMeter=null;
+        lock (equalizerGate) equalizer = null;
         lifetime?.Dispose();lifetime=null;worker=null;
     }
     Task StartCore(double seconds,bool startPaused)
@@ -108,7 +127,15 @@ public sealed class HlsPlayer : IDisposable
                         decoder=new AcmMp3FrameDecompressor(format);
                         pcm=new BufferedWaveProvider(decoder.OutputFormat){BufferDuration=TimeSpan.FromSeconds(4),ReadFully=true,DiscardOnBufferOverflow=false};
                         output=new WaveOutEvent { DesiredLatency=150,NumberOfBuffers=2,Volume=volume };
-                        output.Init(pcm);
+                        var processing = new EqualizerSampleProvider(pcm.ToSampleProvider());
+                        lock (equalizerGate)
+                        {
+                            processing.SetEqualizer(equalizerEnabled, equalizerGains, equalizerHeadroom);
+                            equalizer = processing;
+                        }
+                        playbackMeter = new PlaybackMeter(processing);
+                        output.Init(playbackMeter.ToWaveProvider());
+                        output.Volume=volume;
                         output.PlaybackStopped+=(_,e)=> { if(e.Exception!=null && !ct.IsCancellationRequested) { faulted=true;Error?.Invoke("Audio device disconnected. Connect a device and press Retry."); lifetime?.Cancel(); } };
                         if(!paused)output.Play();
                     }

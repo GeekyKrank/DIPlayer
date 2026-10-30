@@ -19,7 +19,7 @@ public partial class MainWindow
     void SyncPlaybackModes()
     {
         settings.RepeatMode = Math.Clamp(settings.RepeatMode, 0, 2);
-        RepeatButton.Content = settings.RepeatMode == 2 ? "\uE8ED" : "\uE8EE";
+        RepeatButton.Content = settings.RepeatMode == 2 ? UI.Symbols.RepeatOne : UI.Symbols.Repeat;
         RepeatButton.ToolTip = settings.RepeatMode switch { 1 => "Repeat playlist", 2 => "Repeat one track", _ => "Repeat off" };
         ShuffleButton.ToolTip = settings.Shuffle ? "Shuffle on" : "Shuffle off";
         RepeatButton.Foreground = settings.RepeatMode == 0 ? Brushes.Gray : Brushes.White;

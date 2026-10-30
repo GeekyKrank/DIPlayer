@@ -5,7 +5,15 @@ using System.IO;
 using DIPlayer.Storage;
 using DIPlayer.Queue;
 
+if (args.Length == 2 && args[0] == "--export-volume-scripts")
+{
+    File.WriteAllText(args[1], JsonSerializer.Serialize(new[] { DIPlayer.YouTubeVolumeBridge.Install(.23), DIPlayer.YouTubeVolumeBridge.Install(0), DIPlayer.YouTubeVolumeBridge.Install(.61) }));
+    return;
+}
+
 static void Check(bool ok,string label){if(!ok)throw new Exception(label);Console.WriteLine("PASS "+label);}
+ArtworkChecks.Run(Check);
+SearchSuggestionsChecks.Run(Check);
 var track=new Track("1","Test","Author",100000,null,"https://soundcloud.com/test/track","playable");
 Check(SoundCloudCatalog.ExplicitRestriction("geo_blocked")!=SoundCloudCatalog.ExplicitRestriction("subscription_required"),"explicit region and paid access reasons differ");
 Check(SoundCloudCatalog.ExplicitRestriction("blocked")==null,"generic block does not invent a restriction reason");
@@ -116,6 +124,14 @@ using(var releases=JsonDocument.Parse("""[{"draft":false,"tag_name":"v0.3.1-alph
 }
 Check(BrowserAdFilter.Block("https://googleads.g.doubleclick.net/pagead/ad") && BrowserAdFilter.Block("https://music.youtube.com/api/stats/ads?x=1"),"browser ad filter blocks ad hosts and YouTube ad requests");
 Check(!BrowserAdFilter.Block("https://music.youtube.com/search?q=music") && !BrowserAdFilter.Block("https://rr1.googlevideo.com/videoplayback") && !BrowserAdFilter.Block("https://accounts.google.com/") && !BrowserAdFilter.Block("https://doubleclick.net.evil.test/"),"browser filter preserves search, audio, sign-in and exact hostname boundaries");
+await EqualizerChecks.Run();
+await DiscordChecks.Run();
+await LyricsChecks.Run();
+if(args.Contains("--check-live-lyrics"))
+{
+    var synced=await new DIPlayer.SyncedLyricsProvider().Get("20 Min","Lil Uzi Vert",221,default);
+    Check(synced.Length>10,"live LRCLIB matched 20 Min and returned real timed lines");
+}
 Console.WriteLine("All integration checks passed");
 if(args.Contains("--network"))
 {

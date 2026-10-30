@@ -1,103 +1,195 @@
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using DIPlayer.Core;
-using DIPlayer.Storage;
-using System.Security.Cryptography;
-using System.Text;
+
 namespace DIPlayer.UI;
 
-public sealed class Artwork : System.Windows.Controls.Image
+public sealed class Artwork : Image
 {
-    static readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(10) };
-    static readonly SemaphoreSlim slots = new(3, 3);
-    static readonly Dictionary<string, BitmapSource> cache = [];
-    static readonly LinkedList<string> lru = [];
+    static int qualityMode;
     CancellationTokenSource? cancel;
-    string? displayedUrl;
-    public int DecodeWidth { get; set; } = 64;
-    public static readonly DependencyProperty UrlProperty = DependencyProperty.Register(nameof(Url), typeof(string), typeof(Artwork), new PropertyMetadata(null, (o, _) => ((Artwork)o).Load()));
-    public string? Url
+    string? displayedKey, loadingKey;
+    string? resolvedSource, resolvedKey;
+    Uri? resolvedUri;
+    int resolvedDecode, resolvedQuality;
+    int generation, registration;
+    FrameworkElement[] viewportClips = [];
+
+    public static int QualityMode
     {
-        get => (string?)GetValue(UrlProperty); set => SetValue(UrlProperty, value);
+        get => Volatile.Read(ref qualityMode);
+        set
+        {
+            int mode = Math.Clamp(value, 0, 2);
+            if (Interlocked.Exchange(ref qualityMode, mode) != mode) ArtworkViewportScheduler.RefreshAll();
+        }
     }
+    public static int CachedImageCount => ArtworkImageStore.Shared.CachedImageCount;
+    public static long CachedBytes => ArtworkImageStore.Shared.CachedBytes;
+    public static void ClearMemoryCache() => ArtworkImageStore.Shared.Clear();
+
+    public static readonly DependencyProperty DecodeWidthProperty = DependencyProperty.Register(
+        nameof(DecodeWidth), typeof(int), typeof(Artwork), new PropertyMetadata(64, Changed));
+    public int DecodeWidth { get => (int)GetValue(DecodeWidthProperty); set => SetValue(DecodeWidthProperty, value); }
+    public bool PreserveAspectRatio { get; set; } = true;
+    public static readonly DependencyProperty UrlProperty = DependencyProperty.Register(
+        nameof(Url), typeof(string), typeof(Artwork), new PropertyMetadata(null, Changed));
+    public string? Url { get => (string?)GetValue(UrlProperty); set => SetValue(UrlProperty, value); }
+
     public Artwork()
     {
-        Stretch = System.Windows.Media.Stretch.UniformToFill;
-        Loaded += (_, _) => Load();
-        IsVisibleChanged += (_, _) => { if (IsVisible) Load(); else cancel?.Cancel(); };
-        Unloaded += (_, _) => { cancel?.Cancel(); cancel?.Dispose(); cancel = null; Source = null; displayedUrl = null; };
+        Stretch = Stretch.Uniform;
+        Loaded += (_, _) =>
+        {
+            if (registration != 0) ArtworkViewportScheduler.Unregister(Dispatcher, registration);
+            viewportClips = FindViewportClips();
+            registration = ArtworkViewportScheduler.Register(this);
+        };
+        SizeChanged += (_, _) => ArtworkViewportScheduler.Request(Dispatcher);
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) Release();
+            else ArtworkViewportScheduler.Request(Dispatcher);
+        };
+        Unloaded += (_, _) =>
+        {
+            ArtworkViewportScheduler.Unregister(Dispatcher, registration);
+            registration = 0; viewportClips = []; Release();
+        };
     }
-    async void Load()
+
+    static void Changed(DependencyObject target, DependencyPropertyChangedEventArgs args)
     {
-        cancel?.Cancel();
-        cancel?.Dispose();
-        cancel = null;
-        string? requestedUrl = Url;
-        if (displayedUrl != requestedUrl) Source = null;
-        if (!IsLoaded || !IsVisible || string.IsNullOrEmpty(Url))
-            return;
-        int decode = Math.Clamp(DecodeWidth, 32, 256);
-        string url = Url.Replace("-large.", decode > 64 ? "-t200x200." : "-t67x67.");
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !(uri.Host.EndsWith(".sndcdn.com", StringComparison.OrdinalIgnoreCase) || uri.Host == "i.ytimg.com" || System.Text.RegularExpressions.Regex.IsMatch(uri.Host, @"^(?:lh\d+|yt\d+)\.googleusercontent\.com$") || uri.Host == "yt3.ggpht.com"))
-            return;
-        if (uri.Host.EndsWith(".googleusercontent.com", StringComparison.OrdinalIgnoreCase))
+        var image = (Artwork)target;
+        image.CancelLoad();
+        image.Source = null; image.displayedKey = null;
+        image.resolvedSource = null;
+        if (image.IsLoaded) ArtworkViewportScheduler.Request(image.Dispatcher);
+    }
+
+    public static Uri? ResolveRequestUri(string? source, int decodeWidth, bool allowDownsample = false)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return null;
+        int decode = Math.Clamp(decodeWidth, 32, 1200);
+        string url = source.Replace("-large.", decode > 256 ? "-t500x500." : decode > 96 ? "-t200x200." : "-t67x67.");
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !(uri.Host.EndsWith(".sndcdn.com", StringComparison.OrdinalIgnoreCase) || uri.Host == "i.ytimg.com" || System.Text.RegularExpressions.Regex.IsMatch(uri.Host, @"^(?:lh\d+|yt\d+)\.googleusercontent\.com$") || uri.Host == "yt3.ggpht.com")) return null;
+        if (!uri.Host.EndsWith(".googleusercontent.com", StringComparison.OrdinalIgnoreCase)) return uri;
+        url = System.Text.RegularExpressions.Regex.Replace(url, @"=w(\d+)-h(\d+)", match =>
         {
-            url = System.Text.RegularExpressions.Regex.Replace(url, @"=w\d+-h\d+", "=w" + decode + "-h" + decode);
-            url = url.Replace("-rw", "-rj", StringComparison.Ordinal);
-            uri = new Uri(url);
-        }
-        string cacheKey = url + "#decode=" + decode;
-        if (cache.TryGetValue(cacheKey, out var image))
+            if (!int.TryParse(match.Groups[1].Value, out int originalWidth) || !int.TryParse(match.Groups[2].Value, out int originalHeight) || originalWidth <= 0 || originalHeight <= 0) return match.Value;
+            int width = allowDownsample ? decode : Math.Max(originalWidth, decode);
+            long height = Math.Max(1, (long)Math.Round((double)originalHeight * width / originalWidth));
+            return "=w" + width + "-h" + height;
+        });
+        return new Uri(url.Replace("-rw", "-rj", StringComparison.Ordinal));
+    }
+
+    internal static int EffectiveDecodeWidth(int requested, double physicalWidth, int mode)
+    {
+        int width = Math.Clamp((int)Math.Ceiling(Math.Max(requested, physicalWidth)), 32, 1200);
+        return mode switch { 1 => Math.Min(1200, (int)Math.Ceiling(width * 1.5)), 2 => Math.Min(width, requested >= 1000 ? 384 : 192), _ => width };
+    }
+
+    FrameworkElement[] FindViewportClips()
+    {
+        var clips = new List<FrameworkElement>();
+        DependencyObject? current = VisualTreeHelper.GetParent(this);
+        FrameworkElement? root = null;
+        while (current != null)
         {
-            lru.Remove(cacheKey);
-            lru.AddLast(cacheKey);
-            Source = image;
-            displayedUrl = requestedUrl;
-            return;
-        }
-        cancel = new();
-        var ct = cancel.Token;
-        for (int attempt = 0; attempt < 3 && !ct.IsCancellationRequested; attempt++)
-        {
-            try
+            if (current is FrameworkElement element)
             {
-                if (attempt > 0) await Task.Delay(400 * attempt, ct);
-                await slots.WaitAsync(ct);
-                try
-                {
-                    // Another visible copy of this cover may have filled the cache while waiting.
-                    if (!cache.TryGetValue(cacheKey, out image))
-                    {
-                        var candidate = attempt == 1 ? new Uri(requestedUrl!) : uri;
-                        using var r = await http.GetAsync(candidate, HttpCompletionOption.ResponseHeadersRead, ct);
-                        r.EnsureSuccessStatusCode();
-                        var bytes = await SoundCloudCatalog.ReadLimited(r.Content, 2 * 1024 * 1024, ct);
-                        ct.ThrowIfCancellationRequested();
-                        using var input = new MemoryStream(bytes);
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.DecodePixelWidth = decode;
-                        bitmap.StreamSource = input;
-                        bitmap.EndInit();
-                        bitmap.Freeze();
-                        image = bitmap;
-                        cache[cacheKey] = image;
-                    }
-                    lru.Remove(cacheKey); lru.AddLast(cacheKey);
-                    while (cache.Count > 64)
-                    {
-                        cache.Remove(lru.First!.Value); lru.RemoveFirst();
-                    }
-                    if (!ct.IsCancellationRequested && Url == requestedUrl && IsLoaded && IsVisible)
-                    {
-                        Source = image; displayedUrl = requestedUrl;
-                    }
-                    return;
-                }
-                finally { slots.Release(); }
+                root = element;
+                if (element is ScrollContentPresenter or Window || element.ClipToBounds) clips.Add(element);
             }
-            catch (Exception e) when (e is OperationCanceledException or HttpRequestException or IOException or NotSupportedException or CatalogException or System.IO.FileFormatException or ArgumentException or InvalidOperationException) { }
+            current = VisualTreeHelper.GetParent(current);
         }
+        if (root != null && !clips.Contains(root)) clips.Add(root);
+        return clips.ToArray();
+    }
+
+    internal bool IsNearViewport(double margin)
+    {
+        if (!IsLoaded || !IsVisible || PresentationSource.FromVisual(this) == null) return false;
+        try
+        {
+            Visual origin = this;
+            var bounds = new Rect(new Point(), RenderSize);
+            // Image.ArrangeOverride returns a zero RenderSize until Source exists.
+            // The allocated layout slot still locates that empty cover accurately.
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                if (VisualTreeHelper.GetParent(this) is not Visual parent) return false;
+                origin = parent; bounds = LayoutInformation.GetLayoutSlot(this);
+            }
+            if (bounds.Width <= 0 || bounds.Height <= 0) return false;
+            foreach (var clip in viewportClips)
+            {
+                if (!clip.IsVisible || clip.ActualWidth <= 0 || clip.ActualHeight <= 0 || clip is Window { WindowState: WindowState.Minimized }) return false;
+                var viewport = new Rect(0, 0, clip.ActualWidth, clip.ActualHeight);
+                viewport.Inflate(margin, margin);
+                var transformed = ReferenceEquals(origin, clip) ? bounds : origin.TransformToAncestor(clip).TransformBounds(bounds);
+                if (!transformed.IntersectsWith(viewport)) return false;
+            }
+            return true;
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    internal void RefreshViewport()
+    {
+        // Small look-ahead and retention margins prevent edge placeholders/churn.
+        if (!IsNearViewport(Source == null ? 160 : 320)) { Release(); return; }
+        string? source = Url;
+        if (string.IsNullOrEmpty(source)) { CancelLoad(); return; }
+        int quality = QualityMode;
+        double width = ActualWidth > 0 ? ActualWidth : LayoutInformation.GetLayoutSlot(this).Width;
+        int decode = EffectiveDecodeWidth(DecodeWidth, width * VisualTreeHelper.GetDpi(this).DpiScaleX, quality);
+        if (resolvedSource != source || resolvedDecode != decode || resolvedQuality != quality)
+        {
+            resolvedSource = source; resolvedDecode = decode; resolvedQuality = quality;
+            resolvedUri = ResolveRequestUri(source, decode, quality == 2);
+            resolvedKey = resolvedUri == null ? null : ArtworkImageStore.Key(resolvedUri, decode);
+        }
+        var uri = resolvedUri;
+        if (uri == null) { Release(); return; }
+        string key = resolvedKey!;
+        if (Source != null && displayedKey == key || loadingKey == key && cancel?.IsCancellationRequested == false) return;
+        CancelLoad();
+        var lifetime = new CancellationTokenSource();
+        cancel = lifetime; loadingKey = key;
+        _ = LoadAsync(uri, new Uri(source), decode, key, generation, lifetime);
+    }
+
+    async Task LoadAsync(Uri uri, Uri fallback, int decode, string key, int version, CancellationTokenSource lifetime)
+    {
+        try
+        {
+            var image = await ArtworkImageStore.Shared.GetAsync(uri, fallback, decode, lifetime.Token);
+            if (image != null && !lifetime.IsCancellationRequested && version == generation && IsNearViewport(320))
+            {
+                Source = image; displayedKey = key;
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(cancel, lifetime)) { cancel = null; loadingKey = null; }
+            lifetime.Dispose();
+        }
+    }
+
+    void CancelLoad()
+    {
+        generation++;
+        cancel?.Cancel(); cancel = null; loadingKey = null;
+    }
+    void Release()
+    {
+        CancelLoad();
+        if (Source != null) Source = null;
+        displayedKey = null;
     }
 }

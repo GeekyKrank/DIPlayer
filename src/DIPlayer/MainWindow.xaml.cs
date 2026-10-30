@@ -39,14 +39,24 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializePreferences();
+        InitializeSearchExperience();
+        InitializeEqualizer();
         SyncPlaybackModes();
         LoadBrandLogo();
+        InitializeDiscord();
         WindowFrame.SizeChanged += (_, _) => UpdateWindowCorners();
         DpiChanged += (_, _) => Dispatcher.BeginInvoke(UpdateWindowCorners);
         Tracks.ItemsSource = rows;
         queue.Tracks.AddRange(store.LoadQueue());
-        VolumeSlider.Value = settings.Volume;
+        settings.Volume = double.IsFinite(settings.Volume) ? Math.Clamp(settings.Volume, 0, 1) : .6;
+        VolumeSlider.Value = YouTubeVolume.Value = settings.Volume;
         player.Volume = (float)settings.Volume;
+        volumeSaveTimer.Tick += (_, _) =>
+        {
+            volumeSaveTimer.Stop();
+            if (DiagnosticLibraryDirectory() == null) _ = Guard(() => { settings.Save(); return Task.CompletedTask; });
+        };
         timer.Tick += (_, _) => RefreshPosition();
         player.Error += message => Dispatcher.BeginInvoke(() => SetStatus(message));
         player.Ended += () => { int generation = playGeneration; Dispatcher.BeginInvoke(async () => { if (!quitting && !browserMode && generation == playGeneration) await Guard(() => Advance(1, true)); }); };
@@ -113,6 +123,7 @@ public partial class MainWindow : Window
     void SourceReady(object? sender, EventArgs e)
     {
         UpdateWindowCorners();
+        SyncTrackBackdrop();
         windows = new WindowsIntegration(this, id => Dispatcher.BeginInvoke(async () => { if (browserMode) { await Guard(() => BrowserMedia(id)); return; } if (id == 0) await Guard(TogglePlayback); else if (id == 1) await Advance(1); else if (id == 2) await Advance(-1); else await player.Stop(); }), () => Dispatcher.BeginInvoke(Exit), () => { playCancel?.Cancel(); player.Pause(); SetStatus("Windows is going to sleep. Press Retry after waking. "); }, () => SetStatus("Windows has resumed. Press Retry to reconnect the stream."), async () => { if (quitting || browserMode || current == null) return; bool paused = player.Paused; double position = player.Position; await Guard(() => Play(current, position)); if (paused) player.Pause(); });
         if (!windows.AllKeysRegistered)
             SetStatus("Some media keys are used by another app. Use the player controls.");
@@ -124,6 +135,7 @@ public partial class MainWindow : Window
         if (timer == null || Status == null)
             return;
         UpdateWindowCorners();
+        SyncTrackBackdrop();
         if (IsVisible && WindowState != WindowState.Minimized)
         {
             miniPlayer?.Hide();
@@ -145,13 +157,17 @@ public partial class MainWindow : Window
                 searchGeneration++;
         }
     }
-    void VisiblePropertyChanged(object sender, DependencyPropertyChangedEventArgs e) => VisibilityChanged(sender, EventArgs.Empty);
+    void VisiblePropertyChanged(object sender, DependencyPropertyChangedEventArgs e) { if(startupInitialized) LogWindowTransition("Visibility changed"); VisibilityChanged(sender, EventArgs.Empty); }
+    bool requestedTrayClose;
     void WindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (!quitting)
         {
             e.Cancel = true;
-            if (windows?.TrayAvailable == false)
+            if (!requestedTrayClose) { LogWindowTransition("Ignored unsolicited close"); return; }
+            requestedTrayClose = false;
+            LogWindowTransition("User close to tray");
+            if (!settings.CloseToTray || windows?.TrayAvailable == false)
                 Exit();
             else
                 Hide();
@@ -162,6 +178,11 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        volumeSaveTimer.Stop();
+        equalizerApplyTimer.Stop();
+        equalizerSaveTimer.Stop();
+        discordTimer.Stop();
+        discordPresence.Dispose();
         browserGeneration++;
         DisposeMusicBrowser();
         navigationCancel?.Cancel();
@@ -189,8 +210,10 @@ public partial class MainWindow : Window
     }
     async void SearchChanged(object sender, TextChangedEventArgs e)
     {
-        if (SearchBox == null)
+        if (SearchBox == null||suppressSearchTextChange||browserMode)
             return;
+        searchExplicitCommit=false;
+        QueueSearchSuggestions();
         searchCancel?.Cancel();
         int generation = ++searchGeneration;
         searchCancel = new();
@@ -201,16 +224,11 @@ public partial class MainWindow : Window
     }
     async void SearchKey(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if(HandleSearchSuggestionKey(e))return;
         if (e.Key == Key.Enter)
         {
-            searchCancel?.Cancel();
-            searchCancel = new();
-            query = SearchBox.Text.Trim();
-            page = 0;
-            cursors.Clear();
-            cursors.Add(null);
-            SetView("search");
-            await Guard(() => LoadSearch(searchCancel.Token, ++searchGeneration));
+            e.Handled=true;
+            await Guard(()=>CommitSoundCloudSearch(SearchBox.Text));
         }
     }
     async Task LoadSearch(CancellationToken ct, int generation)
@@ -227,9 +245,11 @@ public partial class MainWindow : Window
         Heading.Text = "Search results";
         SetStatus(result.Tracks.Count == 0 ? "No results found" : "");
         Paging();
+        RefreshSearchSuggestionsFromSoundCloud(query,result.Tracks);
     }
     void SetView(string value)
     {
+        ClosePlaybackPanelsForNavigation();
         CloseActionPanel(false);
         SettingsPanel.Visibility = Visibility.Collapsed;
         if (view == "queue" && value != "queue") queueReturnView = null;
@@ -630,7 +650,7 @@ public partial class MainWindow : Window
     void MoveUp(object s, RoutedEventArgs e) => Move(-1); void MoveDown(object s, RoutedEventArgs e) => Move(1);
     void RefreshPosition()
     {
-        PlayPause.Content = player.Playing && !player.Paused ? "\uE769" : "\uE768";
+        PlayPause.Content = player.Playing && !player.Paused ? UI.Symbols.Pause : UI.Symbols.Play;
         if (dragging)
             return;
         PositionSlider.Maximum = Math.Max(1, player.Duration);
@@ -653,32 +673,32 @@ public partial class MainWindow : Window
         if (browserMode) { SettingsPanel.Visibility = Visibility.Collapsed; ShowYouTubeNative(); YouTubeHomeClick(s,e); }
         else LibraryView(s,e);
     }
-    void MinimizeClick(object s, RoutedEventArgs e) { WindowState = WindowState.Minimized; if (windows?.TrayAvailable != false) Hide(); ShowMiniPlayer(); }
+    void MinimizeClick(object s, RoutedEventArgs e) { LogWindowTransition("User minimize"); WindowState = WindowState.Minimized; if (settings.MiniPlayerEnabled) { if (windows?.TrayAvailable != false) Hide(); ShowMiniPlayer(); } }
     void MaximizeClick(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-    void CloseClick(object s, RoutedEventArgs e) => Close();
+    void CloseClick(object s, RoutedEventArgs e) { requestedTrayClose = true; Close(); }
     bool? compactLayout;
     void LayoutChanged(object s, SizeChangedEventArgs e)
     {
         if (PlayerLayout == null)
             return;
         UpdateWindowCorners();
-        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? UI.Symbols.Restore : UI.Symbols.Maximize;
         bool compact = ActualWidth < 820;
         UpdatePlaylistLayout();
         if (compactLayout == compact)
             return;
         compactLayout = compact;
-        PlayerRow.Height = new GridLength(compact ? 140 : 100);
-        CompactControlsRow.Height = new GridLength(compact ? 48 : 0);
-        TrackColumn.Width = compact ? new GridLength(142) : new GridLength(1, GridUnitType.Star);
-        ControlsColumn.Width = compact ? new GridLength(1, GridUnitType.Star) : new GridLength(160);
+        PlayerRow.Height = new GridLength(compact ? 112 : 76);
+        CompactControlsRow.Height = new GridLength(compact ? 40 : 0);
+        TrackColumn.Width = new GridLength(1, GridUnitType.Star);
+        ControlsColumn.Width = new GridLength(120);
         ExtrasColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        Grid.SetColumnSpan(TrackInfo, compact ? 2 : 1);
-        Grid.SetColumn(PlaybackModes, compact ? 1 : 0);
-        Grid.SetRow(Transport, compact ? 1 : 0);
-        Grid.SetColumn(Transport, compact ? 0 : 1);
+        Grid.SetColumnSpan(TrackInfo, 1);
+        Grid.SetRow(Transport, 0);
+        Grid.SetColumn(Transport, 1);
         Grid.SetRow(PlayerExtras, compact ? 1 : 0);
-        Grid.SetColumn(PlayerExtras, compact ? 1 : 2);
+        Grid.SetColumn(PlayerExtras, compact ? 0 : 2);
+        Grid.SetColumnSpan(PlayerExtras, compact ? 3 : 1);
         ContentPanel.Margin = compact ? new Thickness(10, 6, 10, 10) : new Thickness(20, 6, 20, 16);
         ContentPanel.Padding = new Thickness(compact ? 10 : 16);
         ImportPanel.Margin = ContentPanel.Margin;
@@ -719,6 +739,7 @@ public partial class MainWindow : Window
     {
         if (player != null)
             player.Volume = (float)e.NewValue;
+        if (startupInitialized) RememberVolume(e.NewValue);
     }
     void OpenSoundCloud(object s, RoutedEventArgs e)
     {

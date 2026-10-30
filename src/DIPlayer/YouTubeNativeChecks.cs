@@ -12,7 +12,7 @@ public partial class MainWindow
         if(album==null) await File.WriteAllTextAsync(Path.Combine(directory,"album-search-state.json"), await musicBrowser!.CoreWebView2.ExecuteScriptAsync(YouTubeBridge.Snapshot));
         CheckInteraction(album != null, "Album search classification failed");
         await ActivateYouTubeItem(album!);
-        CheckInteraction(youtubeCollection != null && YouTubeCollectionHeader.IsVisible && YouTubeCards.IsVisible && youtubeItems.Count > 1, "Album did not open as a native collection");
+        CheckInteraction(youtubeCollection != null && YouTubeCollectionHeader.IsVisible && YouTubeCollectionTable.IsVisible && youtubeItems.Count > 1, "Album did not open as a native collection");
         CheckInteraction(YouTubeBackButton.IsEnabled, "Pinned Back button is disabled after opening an album");
         double backPosition = YouTubeBackButton.TranslatePoint(new Point(0,0),YouTubeNativePanel).Y;
         YouTubeCardsScroll.ScrollToEnd(); await Task.Delay(200); UpdateLayout();

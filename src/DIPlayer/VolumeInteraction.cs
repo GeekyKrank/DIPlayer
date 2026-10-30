@@ -4,6 +4,13 @@ namespace DIPlayer;
 
 public partial class MainWindow
 {
+    readonly System.Windows.Threading.DispatcherTimer volumeSaveTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    void RememberVolume(double value)
+    {
+        settings.Volume = Math.Clamp(value, 0, 1);
+        volumeSaveTimer.Stop();
+        if (DiagnosticLibraryDirectory() == null) volumeSaveTimer.Start();
+    }
     bool volumeDragging;
     void UpdateVolumePointer(double x)
     {

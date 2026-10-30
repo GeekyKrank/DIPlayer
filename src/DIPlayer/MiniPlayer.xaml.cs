@@ -52,7 +52,7 @@ public partial class MiniPlayer : Window
         TrackTitle.Text = track?.Title ?? "DIPlayer";
         TrackArtist.Text = track?.Artist ?? "Choose a track";
         if (Cover.Url != track?.Artwork) Cover.Url = track?.Artwork;
-        ToggleButton.Content = playing ? "\uE769" : "\uE768";
+        ToggleButton.Content = playing ? UI.Symbols.Pause : UI.Symbols.Play;
         PreviousButton.IsEnabled = previous;
         NextButton.IsEnabled = next;
         PreviousButton.ToolTip = previous ? "Previous" : "Start of queue";
@@ -67,6 +67,7 @@ public partial class MiniPlayer : Window
     async void NextClick(object sender, RoutedEventArgs e) { await command(1); sync(); }
     async void ToggleClick(object sender, RoutedEventArgs e) { await command(0); sync(); }
     void HideClick(object sender, RoutedEventArgs e) => Hide();
+    void RestoreClick(object sender, RoutedEventArgs e) { e.Handled = true; restore(); }
     void MiniPointerDown(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is DependencyObject element)

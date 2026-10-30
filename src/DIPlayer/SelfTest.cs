@@ -48,6 +48,19 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-preferences")) await VerifyPreferencesExperience(directory);
+                if (args.Contains("--check-artwork-performance")) await VerifyArtworkPerformance(directory);
+                if (args.Contains("--check-search-experience")) await VerifySearchExperience(directory);
+                if (args.Contains("--check-youtube-equalizer")) await VerifyYouTubeEqualizerFixture(directory);
+                if (args.Contains("--check-artwork-metadata")) await VerifyArtworkMetadataFixture(directory);
+                if (args.Contains("--check-interface")) await VerifyInterface(directory);
+                if (args.Contains("--check-youtube-pagination")) await VerifyYouTubePaginationFixture(directory);
+                if (args.Contains("--check-existing-youtube-profile")) await VerifyExistingYouTubeProfile(directory);
+                if (args.Contains("--check-youtube-menu")) { await ApplyBrowserMode(true); await VerifyYouTubeMenuFixture(directory); await ApplyBrowserMode(false); }
+                if (args.Contains("--check-youtube-discovery")) await VerifyYouTubeDiscovery(directory);
+                if (args.Contains("--check-lyrics-interface")) await VerifyLyricsInterface(directory);
+                if (args.Contains("--check-track-design")) await VerifyTrackDesign(directory);
+                if (args.Contains("--check-artist-design")) await VerifyArtistPresentation(directory);
                 if (args.Contains("--check-youtube-native")) await VerifyYouTubeNative(directory);
                 if (args.Contains("--check-browser-mode")) await VerifyBrowserMode(directory);
                 if (args.Contains("--check-update-view"))

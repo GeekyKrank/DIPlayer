@@ -1,5 +1,7 @@
 # Third-party components
 
+- Interface icons: Uicons by [Flaticon](https://www.flaticon.com/uicons), solid rounded 4.0.0. Embedded from the official [CDN](https://cdn-uicons.flaticon.com/4.0.0/uicons-solid-rounded/css/uicons-solid-rounded.css); the WOFF container was converted losslessly to OpenType for WPF. Free use with attribution under the Flaticon License; the bundled terms are in `src/DIPlayer/Assets/UICONS-LICENSE.txt`. [License and attribution](https://www.flaticon.com/uicons/get-started/).
+
 DIPlayer source was written independently. The SoundCloud-Desktop repository was read for architectural research; its code was not imported.
 
 - Microsoft.Web.WebView2 1.0.4258.31 — Microsoft WebView2 SDK license: https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31/license . Browser mode requires the separately installed Microsoft Edge WebView2 Runtime.

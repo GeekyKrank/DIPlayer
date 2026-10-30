@@ -42,3 +42,21 @@ Before the first YouTube document loads, DIPlayer opens the packaged extension's
 
 
 Navigation is service-specific: YouTube mode replaces the left SoundCloud Search/Queue/Import buttons with YouTube Library/Likes/Queue, while the shared house icon opens the active service's home. Back stays above the scrolling content and restores native view history (including collection metadata and scroll position) without navigating away from playing audio. History is bounded to 32 views and cleared when YouTube is unloaded. SoundCloud playlists remain in their own SQLite store; YouTube library/likes come from the local Google browser profile, and neither is imported into the other service's library.
+
+
+## Artist pages, recommendations and track menus
+
+Artist cards and links open a native artist header and cover shelves for the top songs, albums, singles and other sections returned by YouTube Music. The artist name beside the playing track opens its artist page (or an artist search when no link is supplied). Channel and @handle URLs are supported. Home preloads additional recommendation batches; scrolling near the end and Load more request further site continuations, bounded to 600 rendered items.
+
+Right-click a cover card for queue/artist actions or **YouTube Music actions…**. DIPlayer mirrors the site's actual menu and playlist chooser in native controls, including add/remove playlist actions when the account has permission. These actions affect the YouTube account's playlists, not the SoundCloud SQLite library. Queue and Play next actions stay integrated with DIPlayer's playback queue. No menu action is submitted until the user selects it; stale menu selections are refused.
+
+**Lyrics** in the bottom player opens an artwork-and-text view. Text comes from YouTube Music. When it has no timing, opening Lyrics can request a timestamped version from the LRCLIB API using only the track title, artist and duration. Matches require the same title/artist and a duration difference within about two seconds; results are cached for up to 32 tracks and rate-limit retry headers are respected. Real line timestamps drive a 150 ms highlight timer using the actual playback position; pausing freezes it and seeking moves to the corresponding line. Clicking a timed line seeks to it. Unavailable timing is labelled explicitly; no artificial timestamps are generated. Unavailable lyrics clear the previous song's text.
+
+Unexpected close requests no longer silently hide the main window; the explicit Close/Minimize buttons still send it to the tray. Bounded `window-events.log` records window state/visibility transitions and close requests without track titles or account details. The reported periodic disappearance was not reproduced during targeted checks. A five-minute playback soak test has not been completed; the guard is not a confirmed root-cause diagnosis. WebView initialization permission failures stay in the native retry screen.
+
+
+The full artist view includes a high-resolution wide banner, monthly-listener text and expandable biography from YouTube, artist actions, a top-song table, album/single shelves, landscape videos, artist playlists and circular related-artist portraits. Clicking the footer artist opens that page. Large artwork is cached separately with a four-image limit; existing cover thumbnails retain their smaller decode limit.
+
+Album and playlist details use a 270 px cover in the upper left, title/metadata/description and Play all on its right, Share/menu in the upper-right corner, and a song/artist/album/duration table below. Track menus work from the row ellipsis or right click. Artist and album navigation preserve native Back history.
+
+LRCLIB API reference: https://lrclib.net/docs

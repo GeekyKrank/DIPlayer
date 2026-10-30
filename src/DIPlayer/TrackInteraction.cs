@@ -16,6 +16,19 @@ public partial class MainWindow
     }
     async void TrackPointerUp(object s, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Right)
+        {
+            if (e.OriginalSource is DependencyObject source && ItemsControl.ContainerFromElement(Tracks, source) is ListBoxItem item)
+            {
+                Tracks.SelectedItem = item.Content;
+                item.ContextMenu = BuildTrackMenu(item);
+                item.ContextMenu.PlacementTarget = item;
+                item.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                item.ContextMenu.IsOpen = true;
+                e.Handled = true;
+            }
+            return;
+        }
         if (e.ChangedButton != MouseButton.Left) return;
         string? pressed = pressedTrackId;
         pressedTrackId = null;

@@ -11,6 +11,9 @@ public partial class MainWindow
     readonly ObservableCollection<YouTubeItem> youtubeItems = [];
     readonly DispatcherTimer youtubeTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     YouTubeState? youtubeState;
+    DateTime youtubeCatalogReadAt;
+    IntPtr youtubeClippedHandle;
+    bool? youtubeCompactHeader;
     bool youtubeReading, youtubeSeeking, youtubeVolumeDragging, youtubeWebsiteVisible;
     bool youtubeReturningFromSignIn;
     void ObserveYouTubeAccountNavigation(Uri uri)
@@ -74,8 +77,10 @@ public partial class MainWindow
         // HwndHost ignores WPF z-order/clipping. Keep its viewport active for the
         // site's media loader, while exposing only a one-pixel host region.
         if (musicBrowser == null || youtubeWebsiteVisible || !browserMode || musicBrowser.Handle == IntPtr.Zero) return;
+        if (youtubeClippedHandle == musicBrowser.Handle) return;
         var region = CreateRectRgn(0, 0, 1, 1);
         if (SetWindowRgn(musicBrowser.Handle, region, true) == 0) DeleteObject(region);
+        else youtubeClippedHandle = musicBrowser.Handle;
     }
     void YouTubeTick(object? sender, EventArgs e)
     {
@@ -88,12 +93,19 @@ public partial class MainWindow
         int generation = browserGeneration;
         try
         {
-            string json = await musicBrowser.CoreWebView2.ExecuteScriptAsync(YouTubeBridge.Snapshot);
-            if (generation != browserGeneration || !browserMode || json.Length > 256 * 1024) return;
+            bool readCatalog = IsVisible && WindowState != WindowState.Minimized && !youtubeLyricsOpen && !SettingsPanel.IsVisible && !youtubeQueueView && !youtubeKeepCards && !youtubeOpeningCollection && !youtubeLoadingMore
+                && (youtubeItems.Count == 0 || youtubeExpectedRoute != null || DateTime.UtcNow - youtubeCatalogReadAt >= TimeSpan.FromSeconds(5));
+            string json = await musicBrowser.CoreWebView2.ExecuteScriptAsync(readCatalog ? YouTubeBridge.Snapshot : YouTubeBridge.PlaybackSnapshot);
+            if (generation != browserGeneration || !browserMode || json.Length > 1024 * 1024) return;
             var state = JsonSerializer.Deserialize<YouTubeState>(json);
             if (state == null) return;
+            if (readCatalog) youtubeCatalogReadAt = DateTime.UtcNow;
             youtubeState = state;
+            ObserveLyricsPlayback();
+            ObserveYouTubeEqualizer();
             SyncYouTubeHeader();
+            if (youtubeRequestedArtist != null && state.Page?.Title.Equals(youtubeRequestedArtist,StringComparison.OrdinalIgnoreCase) == true && new Uri(state.Url).AbsolutePath.StartsWith("/@")) youtubeExpectedRoute=null;
+            UpdateArtistHeader(state);
             if (youtubeWebsiteVisible && youtubeReturningFromSignIn && state.SignedIn && !state.RequiresWebsite)
             {
                 youtubeItemsSignature = "";
@@ -101,29 +113,29 @@ public partial class MainWindow
             }
             ClipYouTubeHost();
             if (state.RequiresWebsite && !youtubeWebsiteVisible) YouTubeStatus.Text = "Use Sign in / account to complete the account prompt.";
-            string signature = string.Join('\n', state.Items.Select(i => i.Key + i.Title + i.Subtitle + i.Artwork + i.Section));
+            string signature = readCatalog ? string.Join('\n', state.Items.Select(i => i.Key + i.Title + i.Subtitle + i.Artwork + i.Section + i.Kind + i.ArtistKey + i.Duration + i.Album + i.ArtistName + i.IsVideo)) : youtubeItemsSignature;
             bool currentRoute = youtubeExpectedRoute == null || YouTubeRouteMatches(state.Url, youtubeExpectedRoute);
             if (currentRoute) youtubeExpectedRoute = null;
-            if (currentRoute && !youtubeQueueView && !youtubeKeepCards && !youtubeOpeningCollection && signature != youtubeItemsSignature)
+            if (readCatalog && currentRoute && !youtubeQueueView && !youtubeKeepCards && !youtubeOpeningCollection && !youtubeLoadingMore && signature != youtubeItemsSignature)
             {
                 youtubeItemsSignature = signature;
-                youtubeItems.Clear();
-                foreach (var item in state.Items.Where(item => !IsYouTubeLikesDuplicate(item, state.Url)).Take(100)) youtubeItems.Add(item);
+                SetYouTubeItems(state.Items.Where(item => !IsYouTubeLikesDuplicate(item, state.Url)).Take(600));
                 UpdateYouTubeShelves(state.Url);
+                RefreshSearchSuggestionsFromYouTube();
             }
             YouTubeEmpty.Visibility = youtubeItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            if (!youtubeQueueView && !youtubeOpeningCollection) YouTubeStatus.Text = youtubeItems.Count > 0 ? $"{youtubeItems.Count} items · YouTube Music" : "Loading… If sign-in or consent is required, open Website.";
+            if (!youtubeQueueView && !youtubeOpeningCollection) YouTubeStatus.Text = youtubeLoadingMore ? "Loading more…" : youtubeItems.Count > 0 ? $"{youtubeItems.Count} items · YouTube Music" : "Loading… If sign-in or consent is required, open Website.";
             if (state.IsAd) YouTubeStatus.Text = "YouTube advertisement · uBO Lite may not block every ad.";
             YouTubePosition.IsEnabled = !state.IsAd && state.Duration > 0;
             YouTubeNowTitle.Text = state.Title.Length > 0 ? state.Title : "YouTube Music";
             YouTubeNowArtist.Text = state.Artist;
             YouTubeViewCount.Text = state.Views ?? "";
             YouTubeLikeCount.Text = state.LikeCount ?? "";
-            YouTubeViewStat.Visibility = string.IsNullOrWhiteSpace(state.Views) ? Visibility.Collapsed : Visibility.Visible;
-            YouTubeLikeStat.Visibility = string.IsNullOrWhiteSpace(state.LikeCount) ? Visibility.Collapsed : Visibility.Visible;
+            YouTubeViewStat.Visibility = !settings.ShowTrackStats || string.IsNullOrWhiteSpace(state.Views) ? Visibility.Collapsed : Visibility.Visible;
+            YouTubeLikeStat.Visibility = !settings.ShowTrackStats || string.IsNullOrWhiteSpace(state.LikeCount) ? Visibility.Collapsed : Visibility.Visible;
             if (YouTubeNowArtwork.Url != state.Artwork) YouTubeNowArtwork.Url = state.Artwork;
-            YouTubePlay.Content = state.Paused ? "\uE768" : "\uE769";
-            YouTubeRepeat.Content = settings.RepeatMode == 2 ? "\uE8ED" : "\uE8EE";
+            YouTubePlay.Content = state.Paused ? UI.Symbols.Play : UI.Symbols.Pause;
+            YouTubeRepeat.Content = settings.RepeatMode == 2 ? UI.Symbols.RepeatOne : UI.Symbols.Repeat;
             YouTubeRepeat.Foreground = settings.RepeatMode == 0 ? System.Windows.Media.Brushes.Gray : System.Windows.Media.Brushes.White;
             YouTubeShuffle.Foreground = settings.Shuffle ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
             YouTubeLike.Foreground = state.Liked ? System.Windows.Media.Brushes.White : System.Windows.Media.Brushes.Gray;
@@ -133,14 +145,27 @@ public partial class MainWindow
                 YouTubePosition.Value = Math.Clamp(state.Position, 0, YouTubePosition.Maximum);
                 YouTubeTime.Text = Format(state.Position) + " / " + Format(state.Duration);
             }
-            if (!youtubeVolumeDragging) YouTubeVolume.Value = state.Volume;
+            if (!youtubeVolumeDragging) YouTubeVolume.Value = settings.Volume;
             SyncMiniPlayer();
+            if(youtubeLyricsOpen) _ = Guard(()=>RefreshYouTubeLyrics());
+            RequestYouTubePageIfNeeded();
         }
         catch (Exception error) when (error is JsonException or InvalidOperationException or System.Runtime.InteropServices.COMException) { }
         finally { youtubeReading = false; }
     }
     string youtubeDisplayedUrl = "https://music.youtube.com/";
     sealed record YouTubeShelf(string Title, YouTubeItem[] Items);
+    readonly ObservableCollection<YouTubeShelf> youtubeShelves = [];
+    void SetYouTubeItems(IEnumerable<YouTubeItem> source)
+    {
+        var next = source.ToArray();
+        for (int i = 0; i < next.Length; i++)
+        {
+            if (i >= youtubeItems.Count) youtubeItems.Add(next[i]);
+            else if (youtubeItems[i] != next[i]) youtubeItems[i] = next[i];
+        }
+        while (youtubeItems.Count > next.Length) youtubeItems.RemoveAt(youtubeItems.Count - 1);
+    }
     static bool IsYouTubeLikesDuplicate(YouTubeItem item, string url)
     {
         string path = new Uri(url).AbsolutePath;
@@ -151,31 +176,69 @@ public partial class MainWindow
     }
     void UpdateYouTubeShelves(string url)
     {
+        ResetYouTubePagination(url);
         youtubeDisplayedUrl = url;
         SyncYouTubeNavigation();
-        bool cards = !youtubeQueueView && youtubeCollection == null && !url.Contains("/search", StringComparison.OrdinalIgnoreCase)
+        bool artist = youtubeCollection?.Kind == "Artist";
+        bool cards = !youtubeQueueView && (youtubeCollection == null || artist) && !url.Contains("/search", StringComparison.OrdinalIgnoreCase)
             && !url.Contains("/playlist", StringComparison.OrdinalIgnoreCase);
         YouTubeCardsScroll.Visibility = cards ? Visibility.Collapsed : Visibility.Visible;
         YouTubeShelvesScroll.Visibility = cards ? Visibility.Visible : Visibility.Collapsed;
-        YouTubeCollectionHeader.Visibility = youtubeCollection == null ? Visibility.Collapsed : Visibility.Visible;
-        YouTubeShelves.ItemsSource = youtubeItems.GroupBy(item => item.Section)
+        YouTubeCollectionHeader.Visibility = youtubeCollection == null || artist ? Visibility.Collapsed : Visibility.Visible;
+        YouTubeArtistShelves.Visibility = artist ? Visibility.Visible : Visibility.Collapsed;
+        bool collection = youtubeCollection != null && !artist && !youtubeQueueView;
+        YouTubeCards.Visibility = artist || collection ? Visibility.Collapsed : Visibility.Visible;
+        YouTubeCollectionTable.Visibility=collection?Visibility.Visible:Visibility.Collapsed;
+        YouTubeCollectionTracks.ItemsSource=collection?youtubeItems.Where(i=>i.Kind=="Track").Select(i=>i with{Album=i.Album??(youtubeCollection!.Kind=="Album"?youtubeCollection.Title:null),ArtistName=i.ArtistName??youtubeCollectionArtistName}).ToArray():null;
+        if (artist) { YouTubeCardsScroll.Visibility = Visibility.Visible; YouTubeShelvesScroll.Visibility = Visibility.Collapsed; }
+        var shelves = youtubeItems.GroupBy(item => item.Section)
             .Select(group => new YouTubeShelf(group.Key, group.ToArray())).ToArray();
+        // Keep existing shelf containers (and their horizontal positions) when a
+        // continuation only appends sections further down the page.
+        for (int i = 0; i < shelves.Length; i++)
+        {
+            var next = shelves[i];
+            int previous = youtubeShelves.ToList().FindIndex(shelf => shelf.Title == next.Title);
+            if (previous >= 0)
+            {
+                if (previous != i) youtubeShelves.Move(previous, i);
+                if (!youtubeShelves[i].Items.SequenceEqual(next.Items)) youtubeShelves[i] = next;
+            }
+            else youtubeShelves.Insert(i, next);
+        }
+        while (youtubeShelves.Count > shelves.Length) youtubeShelves.RemoveAt(youtubeShelves.Count - 1);
+        if (!ReferenceEquals(YouTubeShelves.ItemsSource, youtubeShelves)) YouTubeShelves.ItemsSource = youtubeShelves;
+        SyncYouTubeArtistPresentation();
+        SyncYouTubeHomePresentation();
     }
     void YouTubeHeaderSizeChanged(object sender, SizeChangedEventArgs e) => SyncYouTubeHeader();
     void SyncYouTubeHeader()
     {
         if (YouTubeAccountButton == null || YouTubeSearchRow == null) return;
-        YouTubeAccountButton.Content = YouTubeSearchRow.ActualWidth < 700 ? "Account"
-            : youtubeState?.SignedIn == true ? "Account connected" : "Sign in / account";
-        YouTubeAccountButton.ToolTip = youtubeState?.SignedIn == true ? "YouTube account connected" : "Sign in to YouTube Music";
+        bool compact = YouTubeSearchRow.ActualWidth < 700;
+        if (youtubeCompactHeader != compact)
+        {
+            youtubeCompactHeader = compact;
+            Resources["ArtistStatWidth"] = new GridLength(compact ? 0 : 120);
+            Resources["ArtistAlbumWidth"] = new GridLength(compact ? 0 : 160);
+            Resources["CollectionArtistWidth"] = compact ? new GridLength(0) : new GridLength(1.3, GridUnitType.Star);
+            Resources["CollectionAlbumWidth"] = compact ? new GridLength(0) : new GridLength(1.5, GridUnitType.Star);
+        }
+        bool connected = youtubeState?.SignedIn == true;
+        YouTubeAccountLabel.Visibility = connected ? Visibility.Collapsed : Visibility.Visible;
+        YouTubeAccountAvatar.Url = connected ? youtubeState?.AccountAvatar : null;
+        YouTubeAccountButton.ToolTip = connected ? string.IsNullOrWhiteSpace(youtubeState?.AccountName) ? "Your Google account" : youtubeState.AccountName : "Sign in to YouTube Music";
     }
     void YouTubeFooterSizeChanged(object sender, SizeChangedEventArgs e)
     {
         if (YouTubeNowInfo == null || YouTubeTransport == null || YouTubeFooterDetails == null) return;
         bool compact = e.NewSize.Width < 820;
-        Grid.SetRow(YouTubeNowInfo, 0); Grid.SetColumn(YouTubeNowInfo, 0); Grid.SetColumnSpan(YouTubeNowInfo, compact ? 3 : 1);
-        Grid.SetRow(YouTubeTransport, compact ? 1 : 0); Grid.SetColumn(YouTubeTransport, compact ? 0 : 1); Grid.SetColumnSpan(YouTubeTransport, compact ? 3 : 1);
-        Grid.SetRow(YouTubeFooterDetails, compact ? 2 : 0); Grid.SetColumn(YouTubeFooterDetails, compact ? 0 : 2); Grid.SetColumnSpan(YouTubeFooterDetails, compact ? 3 : 1);
+        Grid.SetRow(YouTubeNowInfo, 0); Grid.SetColumn(YouTubeNowInfo, 0); Grid.SetColumnSpan(YouTubeNowInfo, 1);
+        Grid.SetRow(YouTubeTransport, 0); Grid.SetColumn(YouTubeTransport, 1); Grid.SetColumnSpan(YouTubeTransport, 1);
+        Grid.SetRow(YouTubeFooterDetails, compact ? 1 : 0); Grid.SetColumn(YouTubeFooterDetails, compact ? 0 : 2); Grid.SetColumnSpan(YouTubeFooterDetails, compact ? 3 : 1);
+        YouTubeFooter.ColumnDefinitions[2].Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        YouTubeNowInfo.ColumnDefinitions[1].Width = compact ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        YouTubeFooterDetails.Margin = compact ? new Thickness(0, 7, 0, 0) : new Thickness(0);
         YouTubeFooterDetails.HorizontalAlignment = HorizontalAlignment.Right;
     }
     void ScrollYouTubePage(object sender, MouseWheelEventArgs e)
@@ -186,6 +249,13 @@ public partial class MainWindow
             ? page.ViewportHeight : Math.Max(1, SystemParameters.WheelScrollLines) * 32;
         page.ScrollToVerticalOffset(page.VerticalOffset - e.Delta / 120.0 * distance);
         e.Handled = true;
+    }
+    void YouTubePageScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        // Ignore bubbled changes from the horizontal carousels.
+        if (sender is not ScrollViewer page || !ReferenceEquals(e.OriginalSource, page)) return;
+        if (e.VerticalChange > 0 || e.ExtentHeightChange != 0 || e.ViewportHeightChange != 0)
+            RequestYouTubePageIfNeeded();
     }
     async void OpenYouTubeCard(object sender, RoutedEventArgs e)
     {
@@ -209,6 +279,7 @@ public partial class MainWindow
     {
         if (YouTubeFailure.Visibility == Visibility.Visible || musicBrowser?.CoreWebView2 == null) { ShowYouTubeFailure("Press Retry to reconnect to YouTube Music."); return; }
         youtubeWebsiteVisible = true;
+        youtubeClippedHandle = IntPtr.Zero;
         _ = ReleaseYouTubeQueueOwnership();
         if (musicBrowser != null && musicBrowser.Handle != IntPtr.Zero) SetWindowRgn(musicBrowser.Handle, IntPtr.Zero, true);
         BrowserPanel.Width = BrowserPanel.Height = double.NaN;
@@ -230,9 +301,13 @@ public partial class MainWindow
             await PlayYouTubeKey(key, seedQueue);
             return;
         }
+        ClosePlaybackPanelsForNavigation();
+        youtubeRequestedArtist = key.StartsWith("/channel/") || key.StartsWith("/browse/UC") || key.StartsWith("/@") ? heading : null;
+        ResetYouTubePagination(uri.AbsoluteUri, true);
         RememberYouTubeView(CaptureYouTubeView());
         youtubeKeepCards = false;
         youtubeCollection = null;
+        youtubeArtistPage = null;
         YouTubeCollectionHeader.Visibility = Visibility.Collapsed;
         youtubeQueueView = false;
         youtubeItemsSignature = "";
@@ -244,14 +319,15 @@ public partial class MainWindow
         YouTubeHeading.Text = heading;
         YouTubeStatus.Text = "Loading…";
         await musicBrowser.CoreWebView2.ExecuteScriptAsync("delete document.documentElement.dataset.diplayerView");
-        await musicBrowser.CoreWebView2.ExecuteScriptAsync(YouTubeBridge.Navigate(key));
+        if(await musicBrowser.CoreWebView2.ExecuteScriptAsync(YouTubeBridge.Navigate(key))=="false") musicBrowser.CoreWebView2.Navigate(uri.AbsoluteUri);
         ShowYouTubeNative();
     }
     async void SearchYouTubeNative(object sender, KeyEventArgs e)
     {
+        if (HandleSearchSuggestionKey(e)) return;
         if (e.Key != Key.Enter) return;
         e.Handled = true;
-        await Guard(() => NavigateYouTube("/search?q=" + Uri.EscapeDataString(YouTubeSearch.Text.Trim()), "Search results"));
+        await Guard(() => CommitYouTubeSearch(YouTubeSearch.Text));
     }
     async void YouTubeHomeClick(object sender, RoutedEventArgs e) => await Guard(() => NavigateYouTube("/", "YouTube Music"));
     async void YouTubeLibraryClick(object sender, RoutedEventArgs e) => await Guard(() => NavigateYouTube("/library", "YouTube Music library"));
@@ -266,11 +342,6 @@ public partial class MainWindow
         DisplayYouTubeQueue();
         ShowYouTubeNative();
         await Task.CompletedTask;
-    }
-    async void YouTubeLoadMore(object sender, RoutedEventArgs e)
-    {
-        if (musicBrowser?.CoreWebView2 != null)
-            await Guard(async () => { await musicBrowser.CoreWebView2.ExecuteScriptAsync("window.scrollTo(0,document.documentElement.scrollHeight);document.querySelector('ytmusic-browse-response,ytmusic-search-page')?.scrollIntoView({block:'end'})"); await RefreshYouTubeNative(); });
     }
     void YouTubeSeekDown(object sender, MouseButtonEventArgs e)
     {
@@ -294,9 +365,16 @@ public partial class MainWindow
     void YouTubeSeekLost(object sender, MouseEventArgs e) => youtubeSeeking = false;
     async Task SetYouTubeVolume(double value)
     {
-        value = Math.Clamp(value, 0, 1); YouTubeVolume.Value = value;
+        value = Math.Clamp(value, 0, 1);
+        RememberVolume(value);
+        VolumeSlider.Value = YouTubeVolume.Value = value;
         if (musicBrowser?.CoreWebView2 != null)
-            await musicBrowser.CoreWebView2.ExecuteScriptAsync("(()=>{const v=document.querySelector('video');if(v){v.volume=" + JsonSerializer.Serialize(value) + ";v.muted=false;}})()");
+            await musicBrowser.CoreWebView2.ExecuteScriptAsync(YouTubeVolumeBridge.Install(value));
+    }
+    async void YouTubeVolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (startupInitialized && browserMode && Math.Abs(e.NewValue - settings.Volume) > .0001)
+            await Guard(() => SetYouTubeVolume(e.NewValue));
     }
     async void YouTubeVolumeDown(object sender, MouseButtonEventArgs e)
     {

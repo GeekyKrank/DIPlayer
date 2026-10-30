@@ -4,12 +4,12 @@ namespace DIPlayer;
 
 public partial class MainWindow
 {
-    void WindowStateChanged(object? sender, EventArgs e) => VisibilityChanged(sender, e);
+    void WindowStateChanged(object? sender, EventArgs e) { if(startupInitialized) LogWindowTransition("Window state changed"); VisibilityChanged(sender, e); }
     MiniPlayer? miniPlayer;
     void ShowMiniPlayer()
     {
         var args = Environment.GetCommandLineArgs();
-        if (quitting || (args.Contains("--selftest") && !args.Contains("--check-mini-player") && !args.Contains("--check-youtube-native"))) return;
+        if (quitting || !settings.MiniPlayerEnabled || (args.Contains("--selftest") && !args.Contains("--check-mini-player") && !args.Contains("--check-youtube-native"))) return;
         miniPlayer ??= new MiniPlayer(id => Guard(() => browserMode ? BrowserMedia(id == 0 ? 0 : id > 0 ? 1 : 2) : id == 0 ? TogglePlayback() : Advance(id)), () => WindowActivation.Restore(this), SyncMiniPlayer);
         miniPlayer.ShowAbove(this);
     }
