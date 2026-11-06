@@ -42,10 +42,22 @@ public partial class MainWindow
         ClosePlayerSettings(this, new RoutedEventArgs());
         ToggleEqualizer(this, new RoutedEventArgs());
         await Task.Delay(200); UpdateLayout();
-        CheckInteraction(EqualizerPresetPicker.Items.Count == 10 && EqualizerCurve.ActualWidth > 150 && EqualizerHeadroomToggle.IsVisible, "Improved equalizer is incomplete in narrow mode");
+        CheckInteraction(EqualizerPresetPicker.Items.Count == 11 && EqualizerCurve.ActualWidth > 150 && EqualizerHeadroomToggle.IsVisible, "Improved equalizer is incomplete in narrow mode");
+        CheckInteraction(equalizerPresets[0].Id == "homerick", "homerick is not the first equalizer preset");
+        ApplyEqualizerPreset("homerick");
+        CheckInteraction(settings.EqualizerEnabled && settings.EqualizerGains.SequenceEqual(new double[] { 3.4, 8.6, 6.8, 0, 6.2, 0 }), "homerick gains differ from the requested settings");
+        CheckInteraction(!InterfaceChildren<Button>(EqualizerOverlay).Any(button => button.Content as string is "Bass" or "Vocal" or "Reset"), "Redundant equalizer buttons remain");
+        ApplyEqualizerPreset("custom");
+        EqualizerPresetPicker.IsDropDownOpen = true; await Task.Delay(120);
+        var popup = (System.Windows.Controls.Primitives.Popup)EqualizerPresetPicker.Template.FindName("PART_Popup", EqualizerPresetPicker);
+        var presetScroll = InterfaceChildren<ScrollViewer>(popup.Child).First();
+        presetScroll.ScrollToEnd(); EqualizerPresetPicker.IsDropDownOpen = false;
+        EqualizerPresetPicker.IsDropDownOpen = true; await Task.Delay(160);
+        CheckInteraction(presetScroll.VerticalOffset < 1 && EqualizerPresetPicker.SelectedValue as string == "custom", "Preset menu did not reopen at the top without changing the selected sound");
+        EqualizerPresetPicker.IsDropDownOpen = false;
         Capture(Path.Combine(directory, "equalizer-curve-narrow.png"));
         CloseEqualizer(this, new RoutedEventArgs());
         Width = 1200; Height = 780;
-        await File.WriteAllTextAsync(Path.Combine(directory, "preferences-check.txt"), "PASS practical settings: immediate motion/blur/quality/density changes; startup volume; persistence; history clearing preserves library; responsive settings and ten-preset equalizer curve/headroom.");
+        await File.WriteAllTextAsync(Path.Combine(directory, "preferences-check.txt"), "PASS practical settings: immediate motion/blur/quality/density changes; startup volume; persistence; history clearing preserves library; responsive settings, first homerick preset with exact requested gains, equalizer curve/headroom.");
     }
 }

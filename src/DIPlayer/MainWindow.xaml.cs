@@ -39,7 +39,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeAlbumBackdrop();
+        // Eased, frame-synchronised wheel scrolling for every pixel-based list in the window.
+        UI.SmoothScroll.SetWheel(this, true);
+        wallpaperTimer.Tick += (_, _) => DrawWallpaperFrame();
         InitializePreferences();
+        IsVisibleChanged += (_, _) => SyncWallpaper();
+        StateChanged += (_, _) => SyncWallpaper();
         InitializeSearchExperience();
         InitializeEqualizer();
         SyncPlaybackModes();
@@ -178,6 +184,8 @@ public partial class MainWindow : Window
         if (quitting)
             return;
         quitting = true;
+        SyncWallpaper();
+        progressFrameTimer.Stop();
         volumeSaveTimer.Stop();
         equalizerApplyTimer.Stop();
         equalizerSaveTimer.Stop();
@@ -650,6 +658,7 @@ public partial class MainWindow : Window
     void MoveUp(object s, RoutedEventArgs e) => Move(-1); void MoveDown(object s, RoutedEventArgs e) => Move(1);
     void RefreshPosition()
     {
+        if (!browserMode) EnsureProgressFrames();
         PlayPause.Content = player.Playing && !player.Paused ? UI.Symbols.Pause : UI.Symbols.Play;
         if (dragging)
             return;

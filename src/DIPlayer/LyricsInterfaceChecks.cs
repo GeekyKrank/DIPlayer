@@ -30,16 +30,19 @@ public partial class MainWindow
         youtubeState=youtubeState with{Position=87};ObserveLyricsPlayback();ApplyLyricsHighlight();await Task.Delay(100);UpdateLayout();
         CheckInteraction(Math.Abs(scroll.VerticalOffset-manualOffset)<1,"Following interrupted manual lyrics reading");
         FollowYouTubeLyrics(this,new RoutedEventArgs());
-        for(int i=0;i<9;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
+        for(int i=0;i<20;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
         CheckInteraction(youtubeLyricsFollowing&&!YouTubeLyricsFollow.IsVisible&&scroll.VerticalOffset>manualOffset+30,"Follow lyrics did not return to the playing line");
         youtubeState=youtubeState with{Position=2};ObserveLyricsPlayback();ApplyLyricsHighlight();
-        for(int i=0;i<9;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
-        CheckInteraction(youtubeActiveLyric==0&&scroll.VerticalOffset<5,"Backward seek did not return lyrics to the first line");
+        for(int i=0;i<20;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
+        var firstLine = youtubeLyricBlocks[0];
+        double firstCenter = firstLine.TranslatePoint(new Point(0, firstLine.ActualHeight / 2), scroll).Y;
+        CheckInteraction(youtubeActiveLyric == 0 && Math.Abs(firstCenter - scroll.ViewportHeight * .42) < 4,
+            "Backward seek did not return the first line to its raised reading position");
         youtubeState=youtubeState with{Position=37};ObserveLyricsPlayback();ApplyLyricsHighlight();
-        for(int i=0;i<9;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
+        for(int i=0;i<20;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
         Capture(Path.Combine(directory,"lyrics-synced.png"));
         Width=460;Height=680;await Task.Delay(150);UpdateLayout();
-        for(int i=0;i<9;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
+        for(int i=0;i<20;i++){await Task.Delay(50);ApplyLyricsHighlight();UpdateLayout();}
         var activeBlock=youtubeLyricBlocks[youtubeActiveLyric];
         double activeY=activeBlock.TranslatePoint(new Point(),scroll).Y;
         CheckInteraction(activeY>=0&&activeY+activeBlock.ActualHeight<=scroll.ViewportHeight,"Active lyrics disappeared after narrowing the window");

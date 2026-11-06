@@ -15,6 +15,7 @@ public partial class MainWindow
         settings.StartupVolume = double.IsFinite(settings.StartupVolume) ? Math.Clamp(settings.StartupVolume, 0, 1) : .6;
         if (!settings.RememberVolume) settings.Volume = settings.StartupVolume;
         MotionPreference.IsChecked = settings.MotionEnabled;
+        AnimatedWallpaperPreference.IsChecked = settings.AnimatedWallpaper;
         BackdropPreference.IsChecked = settings.SoftBackdrop;
         TrayPreference.IsChecked = settings.CloseToTray;
         MiniPreference.IsChecked = settings.MiniPlayerEnabled;
@@ -30,6 +31,7 @@ public partial class MainWindow
     {
         if (preferencesInitializing) return;
         settings.MotionEnabled = MotionPreference.IsChecked == true;
+        settings.AnimatedWallpaper = AnimatedWallpaperPreference.IsChecked == true;
         settings.SoftBackdrop = BackdropPreference.IsChecked == true;
         settings.CloseToTray = TrayPreference.IsChecked == true;
         settings.MiniPlayerEnabled = MiniPreference.IsChecked == true;
@@ -50,6 +52,7 @@ public partial class MainWindow
         LyricsBackdrop.CacheMode = settings.SoftBackdrop ? new BitmapCache { RenderAtScale = .3 } : null;
         LyricsBackdrop.Opacity = settings.SoftBackdrop ? .6 : 0;
         SyncTrackBackdrop();
+        SyncWallpaper();
         if (youtubeCollection?.Kind == "Artist") SyncYouTubeArtistPresentation();
         StartupVolumePreference.IsEnabled = !settings.RememberVolume;
         PreferencesStatus.Text = "Saved automatically · changes apply immediately";

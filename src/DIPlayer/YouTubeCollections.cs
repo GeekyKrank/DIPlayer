@@ -8,10 +8,13 @@ public partial class MainWindow
     YouTubeItem? youtubeCollection;
 
 
-    async Task PlayYouTubeKey(string key, bool seedQueue = true)
+    async Task PlayYouTubeKey(string key, bool seedQueue = true, bool videoCard = false)
     {
         if (musicBrowser?.CoreWebView2 == null) return;
+        if (clipMode && publicClipBrowser != null) CloseTrackClip();
         if (seedQueue) SeedYouTubeQueue(key);
+        string? id = VideoIdFromWatchKey(key);
+        youtubeSelectedVideoId = id != null && (videoCard || youtubeQueueVideoIds.Contains(id)) ? id : null;
         // Keep the user's gallery/album open while the browser starts the audio.
         youtubeKeepCards = true;
         await ConfigureYouTubeQueue();
@@ -23,7 +26,7 @@ public partial class MainWindow
     async Task ActivateYouTubeItem(YouTubeItem item)
     {
         if (youtubeOpeningCollection || musicBrowser?.CoreWebView2 == null) return;
-        if (item.Kind == "Track") { await PlayYouTubeKey(item.Key); return; }
+        if (item.Kind == "Track") { await PlayYouTubeKey(item.Key, videoCard: item.IsVideo); return; }
         if (item.Kind is "Browse" or "Artist") { await NavigateYouTube(item.Key, item.Title); return; }
         int generation = browserGeneration;
         youtubeOpeningCollection = true;
@@ -69,18 +72,19 @@ public partial class MainWindow
                 return;
             }
             RememberYouTubeView(previousView);
-            youtubeCollection = item;
+            string? albumArtwork = detail.Page?.Artwork is string art && art.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? art : item.Artwork;
+            youtubeCollection = item with { Artwork = albumArtwork };
             youtubeQueueView = false;
             youtubeKeepCards = true;
-            youtubeItems.Clear(); foreach (var track in tracks) youtubeItems.Add(track);
+            SetYouTubeItems(tracks);
             YouTubeHeading.Text = item.Kind == "Album" ? "Album" : "Playlist";
             youtubeCollectionArtistName=detail.Page?.ArtistName;
             YouTubeCollectionDescription.Text = detail.Page?.Description??"";
             YouTubeCollectionTitle.Text = detail.Page?.Title is { Length: > 0 } title ? title : item.Title;
             YouTubeCollectionSubtitle.Text = item.Subtitle + " · " + tracks.Length + " tracks";
-            YouTubeCollectionArtwork.Url = detail.Page?.Artwork is string art && art.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? art : item.Artwork;
+            YouTubeCollectionArtwork.Url = albumArtwork;
             UpdateYouTubeShelves(detail.Url);
-            YouTubeCardsScroll.ScrollToTop();
+            UI.SmoothScroll.Stop(YouTubeCardsScroll); YouTubeCardsScroll.ScrollToTop();
             YouTubeStatus.Text = tracks.Length + " tracks · YouTube Music";
             YouTubeEmpty.Visibility = Visibility.Collapsed;
         }

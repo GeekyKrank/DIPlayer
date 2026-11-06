@@ -24,7 +24,7 @@ public static class Symbols
     public const string Search = "\uF13A"; // fi-sr-search
     public const string Library = "\uE262"; // fi-sr-books
     public const string Settings = "\uF163"; // fi-sr-settings
-    public const string Close = "\uE5EB"; // fi-sr-cross-small
+    public const string Close = "\uE5E8"; // fi-sr-cross; matches the other window controls
     public const string Down = "\uE0A1"; // fi-sr-angle-small-down
     public const string Up = "\uE0A4"; // fi-sr-angle-small-up
     public const string Back = "\uE0A2"; // fi-sr-angle-small-left

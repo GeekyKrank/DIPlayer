@@ -5,6 +5,21 @@ namespace DIPlayer;
 public partial class MainWindow
 {
     string? youtubeCollectionArtistName;
+    readonly Dictionary<string,string> youtubeAlbumArtwork = new(StringComparer.Ordinal);
+
+    YouTubeItem WithYouTubeCollectionArtwork(YouTubeItem item)
+    {
+        if (item.Kind != "Track" || youtubeCollection is not { Kind: "Album", Artwork: { Length: > 0 } artwork }) return item;
+        if (VideoIdFromWatchKey(item.Key) is { } id) youtubeAlbumArtwork[id] = artwork;
+        return item with { Artwork = artwork };
+    }
+
+    YouTubeState WithYouTubeAlbumArtwork(YouTubeState state)
+    {
+        string? id = state.VideoId ?? VideoIdFromWatchKey(new Uri(state.Url).PathAndQuery);
+        return !state.IsAd && id != null && youtubeAlbumArtwork.TryGetValue(id, out var artwork)
+            ? state with { Artwork = artwork } : state;
+    }
     void ShareYouTubeCollection(object sender,RoutedEventArgs e)
     {
         if(!Uri.TryCreate(youtubeDisplayedUrl,UriKind.Absolute,out var uri)||uri.Host!="music.youtube.com")return;

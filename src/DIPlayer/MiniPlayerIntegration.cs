@@ -4,7 +4,7 @@ namespace DIPlayer;
 
 public partial class MainWindow
 {
-    void WindowStateChanged(object? sender, EventArgs e) { if(startupInitialized) LogWindowTransition("Window state changed"); VisibilityChanged(sender, e); }
+    void WindowStateChanged(object? sender, EventArgs e) { if(startupInitialized) LogWindowTransition("Window state changed"); VisibilityChanged(sender, e); SyncClipWindowState(); }
     MiniPlayer? miniPlayer;
     void ShowMiniPlayer()
     {

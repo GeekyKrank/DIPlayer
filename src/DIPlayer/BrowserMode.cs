@@ -15,6 +15,7 @@ public partial class MainWindow
     void OpenPlayerSettings(object sender, RoutedEventArgs e)
     {
         UpdateMemoryCacheStatus();
+        CloseTrackClip();
         if (browserMode && musicBrowser?.CoreWebView2 != null) ParkYouTubeBrowser();
         else BrowserPanel.Visibility = Visibility.Collapsed;
         YouTubeNativePanel.Visibility = Visibility.Collapsed;
@@ -32,6 +33,7 @@ public partial class MainWindow
     }
     async Task ApplyBrowserMode(bool enabled)
     {
+        progressFrameTimer.Stop(); progressPlaying = false; progressTrack = "";
         int generation = ++browserGeneration;
         youtubeMenuOpen=false; YouTubeActionsOverlay.Visibility=Visibility.Collapsed;
         StopYouTubeLyrics();
@@ -91,6 +93,7 @@ public partial class MainWindow
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.AreDevToolsEnabled = false;
+            core.Settings.IsNonClientRegionSupportEnabled = true;
             core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
             core.WebResourceRequested += (_, request) =>
             {
@@ -101,6 +104,8 @@ public partial class MainWindow
             {
                 if (browserConfiguringBlocker && args.Uri.StartsWith(browserBlockerOrigin + "/", StringComparison.Ordinal)) return;
                 if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) || uri.Scheme != "https") { args.Cancel = true; return; }
+                // A full page load discards the in-page video screen; restore the native layout with it.
+                if (clipMode || openingClip) CloseTrackClip();
                 ObserveYouTubeAccountNavigation(uri);
             };
             core.NewWindowRequested += (_, args) =>
@@ -149,12 +154,12 @@ public partial class MainWindow
             core.WebMessageReceived += (_, message) =>
             {
                 if (!browserMode || quitting || generation != browserGeneration || !Uri.TryCreate(message.Source, UriKind.Absolute, out var source) || source.Host != "music.youtube.com") return;
-                try
-                {
-                    if (message.TryGetWebMessageAsString() == "diplayer-youtube-ended")
-                        Dispatcher.BeginInvoke(async () => await Guard(() => AdvanceYouTube(1)));
-                }
-                catch (ArgumentException) { }
+                string? text;
+                try { text = message.TryGetWebMessageAsString(); }
+                catch (ArgumentException) { return; }
+                if (text == "diplayer-youtube-ended")
+                    Dispatcher.BeginInvoke(async () => await Guard(() => AdvanceYouTube(1)));
+                else if (text != null) HandleClipMessage(text);
             };
             try
             {
@@ -207,6 +212,8 @@ public partial class MainWindow
         StopYouTubeLyrics();
         youtubeTimer.Stop();
         youtubeQueue.Tracks.Clear(); youtubeQueue.Index = -1; youtubeQueue.ResetNavigation(); youtubeQueueView = false; youtubeQueueCleared = false;
+        youtubeQueueVideoIds.Clear(); youtubeSelectedVideoId = null;
+          youtubeAlbumArtwork.Clear();
         youtubeExpectedRoute = null;
         youtubeKeepCards = youtubeOpeningCollection = false; youtubeCollection = null; youtubeHistory.Clear(); youtubeDisplayedUrl = "https://music.youtube.com/";
         YouTubeCollectionHeader.Visibility = Visibility.Collapsed;
@@ -219,6 +226,7 @@ public partial class MainWindow
         BrowserHost.Child = null;
         musicBrowser?.Dispose();
         musicBrowser = null;
+        SyncWallpaper();
     }
     void BrowserHome(object sender, RoutedEventArgs e) => musicBrowser?.CoreWebView2?.Navigate("https://music.youtube.com/");
     void BrowserBack(object sender, RoutedEventArgs e) { if (musicBrowser?.CanGoBack == true) musicBrowser.GoBack(); }

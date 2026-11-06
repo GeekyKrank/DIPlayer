@@ -27,6 +27,7 @@ public sealed class Settings
     public bool EqualizerHeadroom { get; set; } = true;
     public string EqualizerPresetName { get; set; } = "flat";
     public bool MotionEnabled { get; set; } = true;
+    public bool AnimatedWallpaper { get; set; } = true;
     public bool SoftBackdrop { get; set; } = true;
     public bool CloseToTray { get; set; } = true;
     public bool MiniPlayerEnabled { get; set; } = true;

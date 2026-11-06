@@ -56,6 +56,16 @@ static class LyricsChecks
         using var cleanHttp=new HttpClient(cleanHandler);var cleanProvider=new SyncedLyricsProvider(cleanHttp);
         if((await cleanProvider.GetCandidates("Track (Official Audio)","Artist - Topic",100,default)).Length!=1)throw new Exception("Harmless YouTube labels blocked lyrics fallback");
         if(cleanHandler.Count!=2||!cleanHandler.Requests.Last().Contains("track_name=Track&artist_name=Artist",StringComparison.Ordinal))throw new Exception("Clean lyric metadata was not used in search");
+        var videoHandler=new CandidateHandler(request=>request.RequestUri!.AbsolutePath=="/api/get"?new(HttpStatusCode.NotFound):
+            request.RequestUri.Query.Contains("%D0%9E2",StringComparison.OrdinalIgnoreCase)
+                ?Json(new[]{Record(14,title:"О2",artist:"Artist",duration:116),Record(15,title:"О2 (Slowed)",artist:"Artist",duration:121)})
+                :Json(Array.Empty<object>()));
+        using var videoHttp=new HttpClient(videoHandler);var videoProvider=new SyncedLyricsProvider(videoHttp);
+        var video=await videoProvider.GetCandidates("Artist - O2 (КЛИП) prod by Producer","Artist",121,default,musicVideo:true);
+        if(video.Length!=1||video[0].Id!="lrclib:14"||!videoHandler.Requests[1].Contains("track_name=O2&",StringComparison.Ordinal))
+            throw new Exception("Video title credits, localized spelling or alternate-cut lyric lookup failed");
+        if((await videoProvider.GetCandidates("Artist - O2 (КЛИП) prod by Producer","Artist",121,default)).Length!=0)
+            throw new Exception("The video lyrics match was reused for an incompatible audio duration");
 
         var versionHandler=new CandidateHandler(request=>request.RequestUri!.AbsolutePath=="/api/get"?new(HttpStatusCode.NotFound):Json(new[]{Record(8,title:"Track",artist:"Artist"),Record(9,title:"Track (Slowed)",artist:"Artist"),Record(10,title:"Track (Other Remix)",artist:"Artist")}));
         using var versionHttp=new HttpClient(versionHandler);var versionProvider=new SyncedLyricsProvider(versionHttp);

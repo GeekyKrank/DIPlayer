@@ -28,6 +28,7 @@ public partial class MainWindow
         YouTubeClearQueue.Visibility = youtubeQueueView ? Visibility.Visible : Visibility.Collapsed;
         YouTubeClearQueue.IsEnabled = youtubeQueue.Tracks.Count > 0;
         YouTubeEmpty.Text = youtubeQueueView ? "Queue is empty" : "Search for music, or sign in to access your library.";
+        SyncWallpaper();
         if (!browserMode) return;
         bool library = new Uri(youtubeDisplayedUrl).AbsolutePath == "/library";
         bool likes = youtubeDisplayedUrl.Contains("list=LM", StringComparison.Ordinal);
@@ -67,6 +68,7 @@ public partial class MainWindow
         YouTubeEmpty.Visibility = youtubeItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         Dispatcher.BeginInvoke(() =>
         {
+            UI.SmoothScroll.Stop(YouTubeCardsScroll); UI.SmoothScroll.Stop(YouTubeShelvesScroll);
             YouTubeCardsScroll.ScrollToVerticalOffset(previous.CardsOffset);
             YouTubeShelvesScroll.ScrollToVerticalOffset(previous.ShelvesOffset);
         }, DispatcherPriority.Loaded);

@@ -23,12 +23,6 @@ public partial class MainWindow
         bool maximized = WindowState == WindowState.Maximized;
         double radius = maximized ? 0 : FrameRadius;
         WindowFrame.CornerRadius = new CornerRadius(radius);
-        if (WindowFrame.ActualWidth > 0 && WindowFrame.ActualHeight > 0)
-        {
-            var clip = new RectangleGeometry(new Rect(0, 0, WindowFrame.ActualWidth, WindowFrame.ActualHeight), radius, radius);
-            clip.Freeze();
-            WindowFrame.Clip = maximized ? null : clip;
-        }
         // An opaque native window region keeps the normal WPF rendering path.
         // Update only when size, DPI or maximize state changes; no timer is involved.
         var handle = new WindowInteropHelper(this).Handle;
@@ -45,7 +39,7 @@ public partial class MainWindow
             SetWindowRgn(handle, IntPtr.Zero, true);
             return;
         }
-        var region = CreateRoundRectRgn(0, 0, shape.Item1 + 1, shape.Item2 + 1, diameter, diameter);
+        var region = CreateRoundRectRgn(0, 0, shape.Item1, shape.Item2, diameter, diameter);
         // On success Windows owns the region. Only release it ourselves on failure.
         if (region != IntPtr.Zero && SetWindowRgn(handle, region, true) == 0)
         {

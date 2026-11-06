@@ -48,9 +48,11 @@ public partial class MainWindow
             }
             if (args.Contains("--visual-only"))
             {
+                if (args.Contains("--check-wallpaper")) await VerifyWallpaper(directory);
                 if (args.Contains("--check-preferences")) await VerifyPreferencesExperience(directory);
                 if (args.Contains("--check-artwork-performance")) await VerifyArtworkPerformance(directory);
                 if (args.Contains("--check-search-experience")) await VerifySearchExperience(directory);
+                if (args.Contains("--check-youtube-album")) await VerifyLiveYouTubeAlbum(directory);
                 if (args.Contains("--check-youtube-equalizer")) await VerifyYouTubeEqualizerFixture(directory);
                 if (args.Contains("--check-artwork-metadata")) await VerifyArtworkMetadataFixture(directory);
                 if (args.Contains("--check-interface")) await VerifyInterface(directory);
@@ -60,6 +62,7 @@ public partial class MainWindow
                 if (args.Contains("--check-youtube-discovery")) await VerifyYouTubeDiscovery(directory);
                 if (args.Contains("--check-lyrics-interface")) await VerifyLyricsInterface(directory);
                 if (args.Contains("--check-track-design")) await VerifyTrackDesign(directory);
+                if (args.Contains("--check-progress-motion")) await VerifyProgressMotion(directory);
                 if (args.Contains("--check-artist-design")) await VerifyArtistPresentation(directory);
                 if (args.Contains("--check-youtube-native")) await VerifyYouTubeNative(directory);
                 if (args.Contains("--check-browser-mode")) await VerifyBrowserMode(directory);
@@ -358,7 +361,9 @@ public partial class MainWindow
     }
     void Capture(string file)
     {
-        var bitmap = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(ActualWidth * dpi.DpiScaleX), (int)Math.Ceiling(ActualHeight * dpi.DpiScaleY),
+            96 * dpi.DpiScaleX, 96 * dpi.DpiScaleY, PixelFormats.Pbgra32);
         bitmap.Render(this);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));

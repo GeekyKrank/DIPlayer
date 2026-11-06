@@ -8,6 +8,11 @@ public partial class MainWindow
 {
     void LoadBrandLogo()
     {
+        // The packaged wordmark also works on machines without the local font.
+        BrandLogo.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/brand-wordmark.png"));
+        BrandLogo.Width = 106;
+        BrandLogo.Visibility = Visibility.Visible;
+        BrandTitle.Visibility = Visibility.Collapsed;
         // Keep the personal-use font local. Render its actual glyphs so the
         // title cannot silently switch to a system fallback during formatting.
         string[] folders = [Path.Combine(LibraryStore.DataDirectory, "fonts"),

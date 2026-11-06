@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 
 namespace DIPlayer.UI;
@@ -10,7 +11,7 @@ public sealed class Artwork : Image
 {
     static int qualityMode;
     CancellationTokenSource? cancel;
-    string? displayedKey, loadingKey;
+    string? displayedKey, loadingKey, revealedUrl;
     string? resolvedSource, resolvedKey;
     Uri? resolvedUri;
     int resolvedDecode, resolvedQuality;
@@ -170,7 +171,12 @@ public sealed class Artwork : Image
             var image = await ArtworkImageStore.Shared.GetAsync(uri, fallback, decode, lifetime.Token);
             if (image != null && !lifetime.IsCancellationRequested && version == generation && IsNearViewport(320))
             {
+                // Fade only when the picture really changes; re-entering the viewport
+                // with the same cover stays instant so long lists never flicker.
+                bool changed = revealedUrl != Url;
+                revealedUrl = Url;
                 Source = image; displayedKey = key;
+                if (changed) Reveal();
             }
         }
         catch (OperationCanceledException) { }
@@ -179,6 +185,14 @@ public sealed class Artwork : Image
             if (ReferenceEquals(cancel, lifetime)) { cancel = null; loadingKey = null; }
             lifetime.Dispose();
         }
+    }
+
+    void Reveal()
+    {
+        if (!Motion.Active(this)) return;
+        double target = (double)GetAnimationBaseValue(OpacityProperty);
+        if (target <= 0) return;
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, target, TimeSpan.FromMilliseconds(260)) { EasingFunction = Motion.Gentle, FillBehavior = FillBehavior.Stop });
     }
 
     void CancelLoad()

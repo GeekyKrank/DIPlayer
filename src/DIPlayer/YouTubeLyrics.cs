@@ -18,9 +18,15 @@ public partial class MainWindow
     readonly Stopwatch youtubeLyricsClock=Stopwatch.StartNew(),youtubeLyricsScrollClock=new();
     CancellationTokenSource? youtubeLyricsCancel;
     TimedLyric[] youtubeTimedLyrics=[],youtubeExternalLyrics=[];
+    YouTubeLyricsLine[] youtubeRenderedLyrics=[];
     readonly List<TextBlock> youtubeLyricBlocks=[];
     int youtubeActiveLyric=-2,youtubeSiteActive=-1;
-    double youtubeLyricsScrollFrom=double.NaN,youtubeLyricsScrollTarget;
+    // NaN while the lyrics glide is idle; otherwise the offset where the current glide began.
+    double youtubeLyricsScrollFrom=double.NaN,youtubeLyricsScrollTarget,youtubeLyricsScrollPosition,youtubeLyricsScrollVelocity;
+    bool youtubeLyricsScrollHooked;
+    TimeSpan youtubeLyricsScrollLast;
+    bool[] youtubeLyricLit=[];
+    const double LyricDimOpacity=.36,LyricHoverOpacity=.66;
     YouTubeState? EffectiveLyricsState()
     {
         if(browserMode)return youtubeState;
@@ -32,6 +38,9 @@ public partial class MainWindow
     string CurrentLyricsTrack()
     {
         var state=EffectiveLyricsState();
+        if (browserMode && clipOriginalLyricsTrack is { } original && (clipChangingMusicVariant || clipMode && state?.VideoId == null ||
+            state?.VideoId is { Length: > 0 } id && (id == clipOriginalMedia || id == clipNativeMedia)))
+            return original;
         return (state?.VideoId??"")+"|"+(state?.Title??"")+"|"+(state?.Artist??"")+"|"+Math.Round(state?.Duration??0);
     }
     void SyncLyricsMetadata()
@@ -45,32 +54,42 @@ public partial class MainWindow
     void ObserveLyricsPlayback()
     {
         youtubeLyricsClock.Restart();
+        if (youtubeState?.IsAd == true) return;
         if(CurrentLyricsTrack()!=youtubeLyricsTrack&&youtubeLyricsTrack.Length>0)
         {
             SyncLyricsMetadata();ResetLyricsChoices();
             youtubeLyricsCancel?.Cancel();
-            youtubeTimedLyrics=[];youtubeSiteActive=-1;youtubeActiveLyric=-2;
-            youtubeLyricBlocks.Clear();YouTubeLyricsLines.Children.Clear();
+            youtubeTimedLyrics=[];youtubeSiteActive=-1;youtubeActiveLyric=-2;StopLyricsScroll();
+            youtubeRenderedLyrics=[];youtubeLyricsSignature="unset";
+            clipOriginalLyricsTrack=clipOriginalMedia=clipNativeMedia=null;
+            youtubeLyricBlocks.Clear();YouTubeLyricsLines.Children.Clear();youtubeLyricLit=[];
+            if(clipMode)_=Guard(UpdateClipLyrics);
+            if(!openingClip&&!clipMode)SetClipButtons(ClipButtonLabel);
             YouTubeLyricsSource.Text="";
             YouTubeLyricsMessage.Text="Loading lyrics…";YouTubeLyricsMessage.Visibility=Visibility.Visible;
         }
     }
     void StopYouTubeLyrics()
     {
-        youtubeLyricsTimer.Stop();youtubeLyricsCancel?.Cancel();youtubeLyricsScrollFrom=double.NaN;youtubeLyricsTrack="";
-        youtubeLyricsOpen=false;YouTubeLyricsOverlay.Visibility=Visibility.Collapsed;YouTubeLyricsButton.Foreground=LyricsButton.Foreground=Brushes.Gray;
+        CloseTrackClip();
+        youtubeLyricsTimer.Stop();youtubeLyricsCancel?.Cancel();StopLyricsScroll();youtubeLyricsTrack="";
+        // Navigation needs the destination immediately, so this path never fades.
+        youtubeLyricsOpen=false;UI.Motion.Reset(YouTubeLyricsOverlay);YouTubeLyricsOverlay.Visibility=Visibility.Collapsed;YouTubeLyricsButton.Foreground=LyricsButton.Foreground=Brushes.Gray;
         SyncTrackBackdrop();
     }
     async void ToggleYouTubeLyrics(object sender,RoutedEventArgs e)
     {
         youtubeLyricsOpen=!youtubeLyricsOpen;
         EqualizerOverlay.Visibility=Visibility.Collapsed;
-        YouTubeLyricsOverlay.Visibility=youtubeLyricsOpen?Visibility.Visible:Visibility.Collapsed;
         YouTubeLyricsButton.Foreground=LyricsButton.Foreground=youtubeLyricsOpen?Brushes.White:Brushes.Gray;
         if(youtubeLyricsOpen)
         {
+            // Reopening during the closing fade turns it back into a fade-in.
+            UI.Motion.Restore(YouTubeLyricsOverlay);
+            YouTubeLyricsOverlay.Visibility=Visibility.Visible;
             CloseSearchSuggestions();
-            youtubeLyricBlocks.Clear();YouTubeLyricsLines.Children.Clear();
+            if(!openingClip&&!clipMode)SetClipButtons(ClipButtonLabel);
+            youtubeLyricBlocks.Clear();YouTubeLyricsLines.Children.Clear();youtubeLyricLit=[];StopLyricsScroll();
             YouTubeLyricsMessage.Text=EffectiveLyricsState()==null?"Play a track to see its lyrics.":"Loading lyrics…";
             YouTubeLyricsMessage.Visibility=Visibility.Visible;
             SyncLyricsMetadata();SyncTrackScreenPlayback();SyncTrackBackdrop();
@@ -79,7 +98,13 @@ public partial class MainWindow
             if(youtubeLyricsTimerReady)youtubeLyricsTimer.Start();
             await Guard(()=>RefreshYouTubeLyrics(true));
         }
-        else {youtubeLyricsTimer.Stop();youtubeLyricsCancel?.Cancel();youtubeLyricsScrollFrom=double.NaN;youtubeLyricsTrack="";SyncTrackBackdrop();}
+        else
+        {
+            CloseTrackClip();
+            youtubeLyricsTimer.Stop();youtubeLyricsCancel?.Cancel();StopLyricsScroll();youtubeLyricsTrack="";
+            // The screen fades out; the cover keeps drifting until it is fully hidden.
+            UI.Motion.Conceal(YouTubeLyricsOverlay,SyncTrackBackdrop);
+        }
     }
     ScrollViewer? LyricsScroll()
     {
@@ -95,9 +120,15 @@ public partial class MainWindow
     }
     void PauseLyricsFollowing()
     {
-        youtubeLyricsFollowing=false;youtubeLyricsScrollFrom=double.NaN;SyncLyricsFollowButton();
+        youtubeLyricsFollowing=false;StopLyricsScroll();SyncLyricsFollowButton();
     }
-    void YouTubeLyricsManualScroll(object sender,MouseWheelEventArgs e)=>PauseLyricsFollowing();
+    void YouTubeLyricsManualScroll(object sender,MouseWheelEventArgs e)
+    {
+        PauseLyricsFollowing();
+        if(e.Handled||Keyboard.Modifiers!=ModifierKeys.None||sender is not ScrollViewer scroll||!UI.SmoothScroll.Enabled(scroll))return;
+        e.Handled=true;
+        UI.SmoothScroll.VerticalBy(scroll,-e.Delta/120.0*UI.SmoothScroll.WheelDistance(scroll));
+    }
     void YouTubeLyricsPointerDown(object sender,MouseButtonEventArgs e)
     {
         for(DependencyObject? node=e.OriginalSource as DependencyObject;node!=null&&node!=sender;node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node))
@@ -109,27 +140,100 @@ public partial class MainWindow
     }
     void FollowYouTubeLyrics(object sender,RoutedEventArgs e)
     {
-        youtubeLyricsFollowing=true;SyncLyricsFollowButton();ScrollToLyric(youtubeActiveLyric);
+        youtubeLyricsFollowing=true;SyncLyricsFollowButton();UI.SmoothScroll.Stop(LyricsScroll());ScrollToLyric(youtubeActiveLyric);
     }
-    void ScrollToLyric(int active)
+    void UpdateLyricsPadding()
+    {
+        if (LyricsScroll() is not { } scroll || scroll.ViewportHeight <= 0) return;
+        double padding = scroll.ViewportHeight * .5;
+        YouTubeLyricsLines.Margin = new Thickness(0, padding * 1.55, 0, padding);
+    }
+
+    bool LyricsMotion=>settings.MotionEnabled&&!clipMode&&WindowState!=WindowState.Minimized;
+    void ScrollToLyric(int active,bool instant=false)
     {
         if(!youtubeLyricsFollowing||active<0||active>=youtubeLyricBlocks.Count||youtubeLyricBlocks[active].Text.Length==0)return;
         var line=youtubeLyricBlocks[active];
         Dispatcher.BeginInvoke(()=>
         {
             if(!youtubeLyricsOpen||!youtubeLyricsFollowing||active!=youtubeActiveLyric||!line.IsVisible||LyricsScroll() is not { } scroll)return;
-            double y=line.TranslatePoint(new Point(),scroll).Y+scroll.VerticalOffset;
-            youtubeLyricsScrollTarget=Math.Clamp(y-(scroll.ViewportHeight-line.ActualHeight)*.4,0,scroll.ScrollableHeight);
-            if (!settings.MotionEnabled) { scroll.ScrollToVerticalOffset(youtubeLyricsScrollTarget); youtubeLyricsScrollFrom=double.NaN; return; }
-            youtubeLyricsScrollFrom=scroll.VerticalOffset;youtubeLyricsScrollClock.Restart();
+            UI.SmoothScroll.Stop(scroll);
+            double center=line.TranslatePoint(new Point(0,line.ActualHeight*.5),scroll).Y+scroll.VerticalOffset;
+            double target=Math.Clamp(center-scroll.ViewportHeight*.42,0,Math.Max(0,scroll.ScrollableHeight));
+            if(instant||!LyricsMotion){StopLyricsScroll();scroll.ScrollToVerticalOffset(target);return;}
+            double start=youtubeLyricsScrollHooked?youtubeLyricsScrollPosition:scroll.VerticalOffset;
+            // A seek across the song would otherwise blur dozens of lines past the eye:
+            // jump most of the way and glide only the last screen.
+            double reach=2.5*Math.Max(240,scroll.ViewportHeight*.6);
+            if(Math.Abs(target-start)>reach)
+            {
+                start=target-Math.Sign(target-start)*reach*.4;
+                youtubeLyricsScrollVelocity=0;scroll.ScrollToVerticalOffset(start);
+            }
+            StartLyricsScroll(start,target);
         },DispatcherPriority.Loaded);
     }
-    void AnimateLyricsScroll()
+    void StartLyricsScroll(double start,double target)
     {
-        if(double.IsNaN(youtubeLyricsScrollFrom)||LyricsScroll() is not { } scroll)return;
-        double progress=Math.Min(1,youtubeLyricsScrollClock.Elapsed.TotalSeconds/.32);
-        scroll.ScrollToVerticalOffset(youtubeLyricsScrollFrom+(youtubeLyricsScrollTarget-youtubeLyricsScrollFrom)*(1-Math.Pow(1-progress,3)));
-        if(progress>=1)youtubeLyricsScrollFrom=double.NaN;
+        if(!youtubeLyricsScrollHooked)
+        {
+            youtubeLyricsScrollVelocity=0;youtubeLyricsScrollLast=TimeSpan.Zero;youtubeLyricsScrollClock.Restart();
+            CompositionTarget.Rendering+=LyricsScrollFrame;youtubeLyricsScrollHooked=true;
+        }
+        // Retargeting keeps the current velocity, so consecutive lines flow into each other.
+        youtubeLyricsScrollPosition=start;youtubeLyricsScrollFrom=start;youtubeLyricsScrollTarget=target;
+    }
+    void StopLyricsScroll()
+    {
+        youtubeLyricsScrollFrom=double.NaN;youtubeLyricsScrollVelocity=0;
+        if(!youtubeLyricsScrollHooked)return;
+        CompositionTarget.Rendering-=LyricsScrollFrame;youtubeLyricsScrollHooked=false;
+    }
+    // Runs once per rendered frame only while a glide is active (vsync-smooth instead of the 20 Hz lyrics timer).
+    void LyricsScrollFrame(object? sender,EventArgs e)
+    {
+        if(!youtubeLyricsScrollHooked||double.IsNaN(youtubeLyricsScrollFrom))return;
+        if(!youtubeLyricsOpen||!youtubeLyricsFollowing||LyricsScroll() is not { IsVisible: true } scroll){StopLyricsScroll();return;}
+        TimeSpan now=e is RenderingEventArgs rendering?rendering.RenderingTime:youtubeLyricsScrollClock.Elapsed;
+        double dt=youtubeLyricsScrollLast==TimeSpan.Zero?1/60d:(now-youtubeLyricsScrollLast).TotalSeconds;
+        if(dt<=0)return; // Rendering can be raised more than once for one frame.
+        youtubeLyricsScrollLast=now;dt=Math.Min(dt,.05);
+        // Exact critically damped spring: no overshoot, continuous velocity, frame-rate independent.
+        const double stiffness=10;
+        double target=Math.Clamp(youtubeLyricsScrollTarget,0,Math.Max(0,scroll.ScrollableHeight));
+        double x=youtubeLyricsScrollPosition-target,v=youtubeLyricsScrollVelocity,k=v+stiffness*x,decay=Math.Exp(-stiffness*dt);
+        x=(x+k*dt)*decay;v=(v-stiffness*k*dt)*decay;
+        bool settled=Math.Abs(x)<.4&&Math.Abs(v)<8;
+        youtubeLyricsScrollPosition=settled?target:target+x;youtubeLyricsScrollVelocity=settled?0:v;
+        scroll.ScrollToVerticalOffset(youtubeLyricsScrollPosition);
+        if(settled)StopLyricsScroll();
+    }
+    bool LyricLit(int index,int active,bool timed)=>!timed||index==active||active>=0&&youtubeTimedLyrics.Length>0&&
+        index<youtubeTimedLyrics.Length&&active<youtubeTimedLyrics.Length&&youtubeTimedLyrics[index].Start==youtubeTimedLyrics[active].Start;
+    static void StyleLyricLine(TextBlock block,bool lit,bool animate,bool hover=false)
+    {
+        double opacity=lit?1:hover?LyricHoverOpacity:LyricDimOpacity;
+        if(!animate)
+        {
+            block.BeginAnimation(OpacityProperty,null);block.Opacity=opacity;
+            return;
+        }
+        // Fade the emphasis while keeping the glyphs at their hinted size.
+        // No From value: an interrupted change continues from where it is instead of popping.
+        var duration=TimeSpan.FromMilliseconds(hover?160:lit?420:560);
+        block.BeginAnimation(OpacityProperty,new DoubleAnimation(opacity,duration){EasingFunction=UI.Motion.Gentle});
+    }
+    void UpdateTrackLyricTypography(double width)
+    {
+        bool compact = width < 700;
+        double size = compact ? 24 : width >= 1388 ? 36 : 32;
+        var spacing = new Thickness(0, 0, 0, compact ? 20 : 30);
+        foreach (var line in youtubeLyricBlocks)
+        {
+            line.FontSize = size;
+            line.LineHeight = size * 1.3;
+            line.Margin = spacing;
+        }
     }
     void ApplyLyricsHighlight()
     {
@@ -138,22 +242,27 @@ public partial class MainWindow
         SyncTrackScreenPlayback();
         if(!browserMode&&CurrentLyricsTrack()!=youtubeLyricsTrack){ObserveLyricsPlayback();_ = Guard(()=>RefreshYouTubeLyrics());return;}
         var state=EffectiveLyricsState();
-        double position=(state?.Position??0)+(browserMode&&state?.Paused==false?youtubeLyricsClock.Elapsed.TotalSeconds:0)+lyricsOffset;
+        double position=LyricsPlaybackPosition(state)+lyricsOffset;
         int active=youtubeTimedLyrics.Length>0?LyricsTimeline.ActiveIndex(youtubeTimedLyrics,position):youtubeSiteActive;
         if(state?.IsAd==true)active=-1;
         if(active!=youtubeActiveLyric)
         {
             youtubeActiveLyric=active;
-            bool timed=youtubeTimedLyrics.Length>0||youtubeSiteActive>=0;
+            bool timed=youtubeTimedLyrics.Length>0||youtubeSiteActive>=0,animate=LyricsMotion&&YouTubeLyricsOverlay.IsVisible;
+            bool restyle=youtubeLyricLit.Length!=youtubeLyricBlocks.Count;
+            if(restyle)youtubeLyricLit=new bool[youtubeLyricBlocks.Count];
+            // Only lines whose state changed are touched; usually two per lyric change.
             for(int i=0;i<youtubeLyricBlocks.Count;i++)
             {
-                bool current=i==active||active>=0&&youtubeTimedLyrics.Length>0&&youtubeTimedLyrics[i].Start==youtubeTimedLyrics[active].Start;
-                youtubeLyricBlocks[i].Foreground=Brushes.White;
-                youtubeLyricBlocks[i].BeginAnimation(OpacityProperty,new DoubleAnimation(!timed||current?1:.32,TimeSpan.FromMilliseconds(settings.MotionEnabled ? 180 : 0)));
+                bool lit=LyricLit(i,active,timed);
+                if(!restyle&&lit==youtubeLyricLit[i])continue;
+                youtubeLyricLit[i]=lit;
+                var block=youtubeLyricBlocks[i];
+                StyleLyricLine(block,lit,animate,!lit&&block.IsMouseOver&&block.Cursor==Cursors.Hand);
             }
             ScrollToLyric(active);SyncLyricsFollowButton();
+            if (clipMode) _ = Guard(UpdateClipLyrics);
         }
-        AnimateLyricsScroll();
     }
     async Task SeekToLyric(double start,string track)
     {
@@ -170,6 +279,7 @@ public partial class MainWindow
         bool sought=await musicBrowser.CoreWebView2.ExecuteScriptAsync("(()=>{const v=document.querySelector('video');if(!v||!Number.isFinite(v.duration))return false;v.currentTime=Math.min(v.duration,"+JsonSerializer.Serialize(start)+");return true;})()") == "true";
         if(!sought||generation!=browserGeneration||track!=CurrentLyricsTrack())return;
         youtubeState=youtubeState! with{Position=start};youtubeLyricsClock.Restart();
+        SeekProgressFrame(start);
         youtubeLyricsFollowing=true;youtubeActiveLyric=-2;ApplyLyricsHighlight();
         await RefreshYouTubeNative();
     }
@@ -177,9 +287,11 @@ public partial class MainWindow
     {
         if(!youtubeLyricsScrollReady&&LyricsScroll() is { } scroll)
         {
-            scroll.SizeChanged+=(_,_)=>ScrollToLyric(youtubeActiveLyric);
+            // Resizing re-centres instantly; gliding while the window is dragged feels laggy.
+            scroll.SizeChanged+=(_,_)=>{UpdateLyricsPadding();ScrollToLyric(youtubeActiveLyric,true);};
             youtubeLyricsScrollReady=true;
         }
+        UpdateLyricsPadding();
         lines=lines.Where(l=>l.Text.Length<=2000).Take(500).Select(l=>l with{Start=l.Start is double start&&double.IsFinite(start)&&start>=0?start:null}).ToArray();
         bool timed=lines.Length>0&&lines.All(l=>l.Start.HasValue);
         if(timed)lines=lines.OrderBy(l=>l.Start).ToArray();
@@ -190,26 +302,42 @@ public partial class MainWindow
         YouTubeLyricsMessage.Text=message??"Lyrics are not available for this track.";
         if(signature!=youtubeLyricsSignature)
         {
-            youtubeLyricsSignature=signature;youtubeActiveLyric=-2;youtubeLyricsScrollFrom=double.NaN;
+            bool replacing=youtubeLyricBlocks.Count>0;
+            youtubeLyricsSignature=signature;youtubeActiveLyric=-2;StopLyricsScroll();
+            youtubeRenderedLyrics=lines;
             YouTubeLyricsLines.Children.Clear();youtubeLyricBlocks.Clear();
             youtubeTimedLyrics=timed?lines.Select(l=>new TimedLyric(l.Start!.Value,l.Text)).ToArray():[];
             string track=youtubeLyricsTrack;
-            foreach(var line in lines)
+            // Lines start in their resting state so the first highlight only animates the active line.
+            bool dimmed=timed||youtubeSiteActive>=0;
+            youtubeLyricLit=new bool[lines.Length];
+            var lineStyle=(Style)FindResource("TrackLyricLineStyle");
+            for(int i=0;i<lines.Length;i++)
             {
-                var block=new TextBlock {Text=line.Text,FontSize=LyricsBody.ActualWidth<700?26:32,FontWeight=FontWeights.Bold,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,32),Foreground=Brushes.White};
+                var line=lines[i];
+                var block=new TextBlock {Text=line.Text,Style=lineStyle};
+                youtubeLyricLit[i]=!dimmed;StyleLyricLine(block,!dimmed,false);
                 if(line.Start is double start)
                 {
+                    int index=i;
                     block.Cursor=Cursors.Hand;block.ToolTip="Play from this line";
                     block.MouseLeftButtonUp+=async(_,_)=>await Guard(()=>SeekToLyric(start,track));
+                    block.MouseEnter+=(_,_)=>{if(index<youtubeLyricLit.Length&&!youtubeLyricLit[index])StyleLyricLine(block,false,LyricsMotion,true);};
+                    block.MouseLeave+=(_,_)=>{if(index<youtubeLyricLit.Length&&!youtubeLyricLit[index])StyleLyricLine(block,false,LyricsMotion);};
                 }
                 youtubeLyricBlocks.Add(block);YouTubeLyricsLines.Children.Add(block);
             }
+            UpdateTrackLyricTypography(LyricsBody.ActualWidth);
+            // New lyrics (first load, other version or next track) fade in instead of popping.
+            if(lines.Length>0&&LyricsMotion&&YouTubeLyricsLines.IsVisible)
+                YouTubeLyricsLines.BeginAnimation(OpacityProperty,new DoubleAnimation(0,1,TimeSpan.FromMilliseconds(replacing?220:320)){EasingFunction=UI.Motion.Gentle,FillBehavior=FillBehavior.Stop});
         }
         ApplyLyricsHighlight();
+        if(clipMode)_=Guard(UpdateClipLyrics);
     }
     async Task RefreshYouTubeLyrics(bool force=false)
     {
-        if(!youtubeLyricsOpen||youtubeLyricsReading||browserMode&&musicBrowser?.CoreWebView2==null)return;
+        if(!youtubeLyricsOpen||youtubeLyricsReading||clipChangingMusicVariant||browserMode&&(musicBrowser?.CoreWebView2==null||youtubeState?.IsAd==true))return;
         if(!force&&DateTime.UtcNow-youtubeLyricsReadAt<TimeSpan.FromSeconds(1))return;
         if(!youtubeLyricsTimerReady)
         {
@@ -227,10 +355,11 @@ public partial class MainWindow
             if(force||track!=youtubeLyricsTrack)
             {
                 youtubeLyricsCancel?.Cancel();youtubeLyricsCancel?.Dispose();youtubeLyricsCancel=new();
-                youtubeLyricsTrack=track;youtubeLyricsSignature="unset";youtubeExternalLyrics=[];youtubeTimedLyrics=[];
-                youtubeLyricsExternalTrack="";youtubeLyricsFollowing=true;youtubeLyricsScrollFrom=double.NaN;
+                youtubeLyricsTrack=track;youtubeLyricsSignature="unset";youtubeExternalLyrics=[];youtubeTimedLyrics=[];youtubeRenderedLyrics=[];
+                youtubeLyricsExternalTrack="";youtubeLyricsFollowing=true;StopLyricsScroll();
                 ResetLyricsChoices();
-                YouTubeLyricsLines.Children.Clear();youtubeLyricBlocks.Clear();SyncLyricsFollowButton();LyricsScroll()?.ScrollToTop();
+                YouTubeLyricsLines.Children.Clear();youtubeLyricBlocks.Clear();youtubeLyricLit=[];SyncLyricsFollowButton();
+                if(LyricsScroll() is { } top){UI.SmoothScroll.Stop(top);top.ScrollToTop();}
                 YouTubeLyricsSource.Text="";YouTubeLyricsMessage.Text="Loading lyrics…";YouTubeLyricsMessage.Visibility=Visibility.Visible;
                 if(browserMode&&core!=null)await core.ExecuteScriptAsync(YouTubeLyricsBridge.Open);
             }
@@ -249,12 +378,21 @@ public partial class MainWindow
             if(DiagnosticLibraryDirectory()==null&&(youtubeLyricsExternalTrack!=track||youtubeExternalLyrics.Length==0&&DateTime.UtcNow-youtubeLyricsExternalReadAt>TimeSpan.FromMinutes(1))&&EffectiveLyricsState() is {Duration:>0,IsAd:false} current)
             {
                 youtubeLyricsExternalTrack=track;youtubeLyricsExternalReadAt=DateTime.UtcNow;
-                var candidates=await syncedLyricsProvider.GetCandidates(current.Title,current.Artist,current.Duration,youtubeLyricsCancel?.Token??CancellationToken.None);
+                bool musicVideo=SelectedClipId(current)!=null;
+                var candidates=await syncedLyricsProvider.GetCandidates(current.Title,current.Artist,current.Duration,
+                    youtubeLyricsCancel?.Token??CancellationToken.None,musicVideo:musicVideo);
                 if(!youtubeLyricsOpen||generation!=browserGeneration||track!=CurrentLyricsTrack())return;
                 youtubeExternalLyrics=candidates.FirstOrDefault()?.Lines??[];
                 lyricsChoices.RemoveAll(choice=>choice.Id!="youtube");
                 foreach(var candidate in candidates)
-                    lyricsChoices.Add(new(candidate.Id,candidate.Provider+(candidate.Album.Length>0?" · "+candidate.Album:""),candidate.Lines.Select(line=>new YouTubeLyricsLine(line.Text,false,line.Start)).ToArray(),"Synced · "+candidate.Provider+" · "+candidate.Title+" — "+candidate.Artist));
+                {
+                    double difference=Math.Abs(candidate.Duration-current.Duration);
+                    bool timed=!musicVideo||difference<=8;
+                    string timing=timed ? (difference>2.1?"Song timing · ":"Synced · ") : "Different video cut · ";
+                    lyricsChoices.Add(new(candidate.Id,candidate.Provider+(candidate.Album.Length>0?" · "+candidate.Album:""),
+                        candidate.Lines.Select(line=>new YouTubeLyricsLine(line.Text,false,timed?line.Start:null)).ToArray(),
+                        timing+candidate.Provider+" · "+candidate.Title+" — "+candidate.Artist));
+                }
                 ShowSelectedLyrics(state.Message);
             }
         }

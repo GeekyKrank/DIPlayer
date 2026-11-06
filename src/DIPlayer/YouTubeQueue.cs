@@ -8,6 +8,8 @@ namespace DIPlayer;
 public partial class MainWindow
 {
     readonly PlaybackQueue youtubeQueue = new();
+    readonly HashSet<string> youtubeQueueVideoIds = new(StringComparer.Ordinal);
+    string? youtubeSelectedVideoId;
     bool youtubeQueueView, youtubeAdvancing, youtubeQueueCleared;
     void SeedYouTubeQueue(string key)
     {
@@ -20,11 +22,16 @@ public partial class MainWindow
         int index = tracks.FindIndex(t => t.Id == key);
         if (index < 0) return;
         youtubeQueueCleared = false;
+        youtubeQueueVideoIds.Clear();
+        foreach (var video in youtubeItems.Where(item => item.Kind == "Track" && item.IsVideo))
+            if (VideoIdFromWatchKey(video.Key) is { } id) youtubeQueueVideoIds.Add(id);
         youtubeQueue.Tracks.Clear(); youtubeQueue.Tracks.AddRange(tracks); youtubeQueue.Index = index; youtubeQueue.ResetNavigation();
     }
     async Task ConfigureYouTubeQueue()
     {
         if (musicBrowser?.CoreWebView2 == null) return;
+        if (clipMode && publicClipBrowser?.CoreWebView2 is { } clip)
+            await clip.ExecuteScriptAsync("window.__diplayerClip?.setLoop(" + (settings.RepeatMode == 2 && !youtubeQueueCleared ? "true" : "false") + ")");
         await musicBrowser.CoreWebView2.ExecuteScriptAsync("window.__diplayerNativeQueue=" + (youtubeQueue.Tracks.Count > 0 || youtubeQueueCleared ? "true" : "false") + ";window.__diplayerRepeatOne=" + (settings.RepeatMode == 2 && !youtubeQueueCleared ? "true" : "false") + ";(()=>{const v=document.querySelector('video');if(v)v.loop=" + (settings.RepeatMode == 2 && !youtubeQueueCleared ? "true" : "false") + ";})()");
     }
     async Task ReleaseYouTubeQueueOwnership()
@@ -39,6 +46,7 @@ public partial class MainWindow
     async Task AdvanceYouTube(int direction)
     {
         if (youtubeAdvancing || youtubeQueueCleared || musicBrowser?.CoreWebView2 == null) return;
+        // The video screen stays open across tracks; the page script switches the next track to video.
         youtubeAdvancing = true;
         try
         {
@@ -56,6 +64,15 @@ public partial class MainWindow
     async Task RunYouTubeControl(string action)
     {
         if (musicBrowser?.CoreWebView2 == null) return;
+        if (clipMode && publicClipBrowser?.CoreWebView2 is { } clip)
+        {
+            if (action is "next" or "previous") { await MoveClipTrack(action); return; }
+            if (action is "play" or "stop")
+            {
+                await clip.ExecuteScriptAsync(action == "play" ? "window.__diplayerClip?.togglePlayback()" : "window.__diplayerClip?.pause()");
+                return;
+            }
+        }
         if (action == "next" || action == "previous") { await AdvanceYouTube(action == "next" ? 1 : -1); return; }
         if (action == "shuffle") { settings.Shuffle = !settings.Shuffle; youtubeQueue.ResetNavigation(); SyncPlaybackModes(); await RefreshYouTubeNative(); return; }
         if (action == "repeat") { settings.RepeatMode = (settings.RepeatMode + 1) % 3; SyncPlaybackModes(); await ConfigureYouTubeQueue(); await RefreshYouTubeNative(); return; }
@@ -87,6 +104,7 @@ public partial class MainWindow
         await Guard(async () =>
         {
             youtubeQueue.Tracks.Clear(); youtubeQueue.Index = -1; youtubeQueue.ResetNavigation();
+            youtubeQueueVideoIds.Clear();
             youtubeQueueCleared = true;
             await ConfigureYouTubeQueue();
             if (youtubeQueueView)

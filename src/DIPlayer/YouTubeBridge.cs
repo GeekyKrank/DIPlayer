@@ -1,9 +1,12 @@
 using System.Text.Json;
 namespace DIPlayer;
-public sealed record YouTubeItem(string Key, string Title, string Subtitle, string? Artwork, string Kind, string Section = "YouTube Music", string? ArtistKey = null, bool IsVideo = false, string? Album = null, string? Plays = null, string? Duration = null, string? ArtistName = null);
+public sealed record YouTubeItem(string Key, string Title, string Subtitle, string? Artwork, string Kind, string Section = "YouTube Music", string? ArtistKey = null, bool IsVideo = false, string? Album = null, string? Plays = null, string? Duration = null, string? ArtistName = null, bool HasVideo = false)
+{
+    public bool VideoAvailable => IsVideo || HasVideo;
+}
 public sealed record YouTubeArtistAction(string Label);
 public sealed record YouTubePage(string Title, string Subtitle, string? Artwork, string? Description = null, YouTubeArtistAction[]? Actions = null, string? ArtistName = null);
-public sealed record YouTubeState(string Url, string Title, string Artist, string? Artwork, double Position, double Duration, bool Paused, double Volume, bool Shuffle, int Repeat, bool Liked, YouTubeItem[] Items, bool RequiresWebsite = false, bool IsAd = false, YouTubePage? Page = null, bool SignedIn = false, string? Views = null, string? LikeCount = null, string? ArtistKey = null, string? VideoId = null, string? AccountAvatar = null, string? AccountName = null);
+public sealed record YouTubeState(string Url, string Title, string Artist, string? Artwork, double Position, double Duration, bool Paused, double Volume, bool Shuffle, int Repeat, bool Liked, YouTubeItem[] Items, bool RequiresWebsite = false, bool IsAd = false, YouTubePage? Page = null, bool SignedIn = false, string? Views = null, string? LikeCount = null, string? ArtistKey = null, string? VideoId = null, string? AccountAvatar = null, string? AccountName = null, bool Buffering = false);
 public static class YouTubeBridge
 {
     public const string Snapshot = """
@@ -11,6 +14,21 @@ public static class YouTubeBridge
           if(location.hostname!=='music.youtube.com') return null;
           const readCatalog=true;
           const text=e=>(e?.textContent||'').replace(/\s+/g,' ').trim();
+          const videoInfo=(el,id)=>{
+            const endpoints=[],seen=new Set();
+            const visit=(value,depth=0)=>{
+              if(!value||typeof value!=='object'||depth>14||seen.has(value)||seen.size>=2000)return;
+              seen.add(value);
+              if(value.watchEndpoint)endpoints.push(value.watchEndpoint);
+              for(const child of Object.values(value))visit(child,depth+1);
+            };
+            visit(el.data);
+            visit(el.querySelector('ytmusic-play-button-renderer')?.data);
+            const type=e=>e.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType||'';
+            const isVideo=e=>/MUSIC_VIDEO_TYPE_(OMV|UGC|OFFICIAL_SOURCE_MUSIC)$/.test(type(e));
+            const own=endpoints.filter(e=>e.videoId===id);
+            return {known:own.some(e=>type(e)),isVideo:own.some(isVideo),hasVideo:endpoints.some(isVideo)};
+          };
           const artwork=(el,extra=[])=>{
             const candidates=[];
             const thumbnailKeys=['thumbnail','thumbnails','musicThumbnailRenderer','croppedSquareThumbnailRenderer','thumbnailDetails','foregroundThumbnail'];
@@ -75,12 +93,13 @@ public static class YouTubeBridge
             const subtitle=text(el.querySelector('.secondary-flex-columns,.subtitle,.byline')).slice(0,500);
             const artistKey=Array.from(el.querySelectorAll('a[href]')).map(a=>{try{const u=new URL(a.getAttribute('href'),location.origin);return /^\/(@|channel\/|browse\/UC)/.test(u.pathname)?u.pathname+u.search:null;}catch{return null;}}).find(Boolean)||null;
             const kind=/^\/(@|channel\/|browse\/UC)/.test(u.pathname)?'Artist':u.pathname==='/watch'?'Track':/single|сингл|синґл/i.test(subtitle)?'Single':/album|альбом/i.test(subtitle)||u.pathname.startsWith('/browse/MPRE')?'Album':u.pathname==='/playlist'?'Playlist':'Browse';
-            const isVideo=kind==='Track'&&(/video|відео|видео/i.test(section)||el.tagName==='YTMUSIC-TWO-ROW-ITEM-RENDERER'&&/views|перегляд|просмотр/i.test(subtitle));
+            const info=kind==='Track'?videoInfo(el,u.searchParams.get('v')):null;
+            const isVideo=kind==='Track'&&(info.known?info.isVideo:(/video|відео|видео/i.test(section)||el.tagName==='YTMUSIC-TWO-ROW-ITEM-RENDERER'&&/views|перегляд|просмотр/i.test(subtitle)));
             const albumLink=el.querySelector('.secondary-flex-columns a[href*="browse/MPRE"],.secondary-flex-columns a[href*="playlist?"]');
             const plays=Array.from(el.querySelectorAll('.secondary-flex-columns .flex-column')).map(text).find(s=>/plays|views|прослуш|просмотр|відтвор|перегляд/i.test(s))||null;
             const duration=Array.from(el.querySelectorAll('.fixed-columns .fixed-column,.duration,.time-status')).map(text).find(s=>/^\d{1,2}:\d{2}(?::\d{2})?$/.test(s))||null;
             const artistName=Array.from(el.querySelectorAll('.secondary-flex-columns a[href],.subtitle a[href]')).filter(a=>{try{return /^\/(@|channel\/|browse\/UC)/.test(new URL(a.href,location.origin).pathname);}catch{return false;}}).map(text).filter(Boolean).join(', ');
-            items.push({Section:section,Key:key,Title:title.slice(0,300),Subtitle:subtitle,Artwork:art,Kind:kind,ArtistKey:artistKey,IsVideo:isVideo,Album:text(albumLink)||null,Plays:plays,Duration:duration,ArtistName:artistName||null});
+            items.push({Section:section,Key:key,Title:title.slice(0,300),Subtitle:subtitle,Artwork:art,Kind:kind,ArtistKey:artistKey,IsVideo:isVideo,HasVideo:!!info?.hasVideo,Album:text(albumLink)||null,Plays:plays,Duration:duration,ArtistName:artistName||null});
             if(items.length>=600)break;
           }
           for(const shelf of (readCatalog?document.querySelectorAll('ytmusic-carousel-shelf-renderer,ytmusic-shelf-renderer'):[])){
@@ -136,7 +155,7 @@ public static class YouTubeBridge
           const accountLabel=(accountButton?.getAttribute('aria-label')||accountButton?.getAttribute('title')||accountImage?.getAttribute('alt')||'').trim();
           const accountName=accountLabel&&!/^(?:account|account menu|avatar|avatar image|profile picture|аккаунт|обліковий запис)$/i.test(accountLabel)?accountLabel.slice(0,160):null;
           let videoId;try{videoId=player?.getVideoData?.()?.video_id;}catch{}
-          return {AccountAvatar:accountAvatar,AccountName:accountName,VideoId:videoId||new URL(location.href).searchParams.get('v')||null,ArtistKey:playingArtistKey,Views:views,LikeCount:likeCount,SignedIn:!!accountAvatar,Page:page,Url:location.href,Title:text(bar?.querySelector('.title'))||media?.title||'',Artist:parts[0]||'',Artwork:artwork(bar,media?.artwork),Position:video?.currentTime||0,Duration:Number.isFinite(video?.duration)?video.duration:0,Paused:video?.paused!==false,Volume:video?.volume??1,Shuffle:shuffle?.closest('[aria-pressed]')?.getAttribute('aria-pressed')==='true'||shuffle?.closest('[aria-checked]')?.getAttribute('aria-checked')==='true',Repeat:/one|одн|один/i.test(repeat)?2:/all|вс|усі/i.test(repeat)?1:0,Liked:!!liked,Items:items,RequiresWebsite:!!document.querySelector('ytmusic-popup-container tp-yt-paper-dialog[opened],tp-yt-paper-dialog[opened]'),IsAd:!!document.querySelector('.ad-showing,.ad-interrupting')};
+          return {Buffering:!!video&&(video.readyState<3||video.seeking),AccountAvatar:accountAvatar,AccountName:accountName,VideoId:videoId||new URL(location.href).searchParams.get('v')||null,ArtistKey:playingArtistKey,Views:views,LikeCount:likeCount,SignedIn:!!accountAvatar,Page:page,Url:location.href,Title:text(bar?.querySelector('.title'))||media?.title||'',Artist:parts[0]||'',Artwork:artwork(bar,media?.artwork),Position:video?.currentTime||0,Duration:Number.isFinite(video?.duration)?video.duration:0,Paused:video?.paused!==false,Volume:video?.volume??1,Shuffle:shuffle?.closest('[aria-pressed]')?.getAttribute('aria-pressed')==='true'||shuffle?.closest('[aria-checked]')?.getAttribute('aria-checked')==='true',Repeat:/one|одн|один/i.test(repeat)?2:/all|вс|усі/i.test(repeat)?1:0,Liked:!!liked,Items:items,RequiresWebsite:!!document.querySelector('ytmusic-popup-container tp-yt-paper-dialog[opened],tp-yt-paper-dialog[opened]'),IsAd:!!document.querySelector('.ad-showing,.ad-interrupting')};
         })()
         """;
     public static readonly string PlaybackSnapshot=Snapshot.Replace("const readCatalog=true;","const readCatalog=false;",StringComparison.Ordinal);
@@ -148,6 +167,14 @@ public static class YouTubeBridge
               const key=KEY;
               const u=new URL(key,'https://music.youtube.com/');
               if(u.hostname!=='music.youtube.com')return false;
+              // Stop the old recording before dispatching a new watch endpoint.
+              // SPA navigation can otherwise leave its buffered tail audible while
+              // the new video's metadata/decoder is being installed.
+              if(u.pathname==='/watch'){
+                let previous;try{previous=document.getElementById('movie_player')?.getVideoData?.()?.video_id;}catch{}
+                previous=previous||new URL(location.href).searchParams.get('v');
+                if(u.searchParams.get('v')!==previous)document.querySelector('video')?.pause();
+              }
               const match=Array.from(document.querySelectorAll('a[href]')).find(a=>{try{const v=new URL(a.getAttribute('href'),location.origin+'/');return v.pathname+v.search===u.pathname+u.search;}catch{return false;}});
               if(match){match.click();return true;}
               let endpoint;

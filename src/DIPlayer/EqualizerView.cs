@@ -26,6 +26,7 @@ public partial class MainWindow
     }
     static readonly EqualizerPresetOption[] equalizerPresets =
     [
+        new("homerick", "homerick", [3.4, 8.6, 6.8, 0, 6.2, 0]),
         new("flat", "Flat", [0, 0, 0, 0, 0, 0]),
         new("bass", "Bass boost", [5, 3, 0, -1, 0, 1]),
         new("vocal", "Vocal", [-3, -2, 1, 3, 2, -1]),
@@ -74,7 +75,16 @@ public partial class MainWindow
     {
         bool open = EqualizerOverlay.Visibility != Visibility.Visible;
         EqualizerOverlay.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-        if (open) { SyncEqualizerStatus(); SyncEqualizerCurve(); EqualizerEnabledToggle.Focus(); }
+        if (open) { SyncEqualizerStatus(); SyncEqualizerCurve(); EqualizerEnabledToggle.Focus(); EqualizerScroll.ScrollToTop(); }
+    }
+    void EqualizerPresetsOpened(object sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!EqualizerPresetPicker.IsDropDownOpen) return;
+            if (EqualizerPresetPicker.Template.FindName("PART_Popup", EqualizerPresetPicker) is System.Windows.Controls.Primitives.Popup popup && popup.Child is DependencyObject child)
+                foreach (var scroll in InterfaceChildren<ScrollViewer>(child)) scroll.ScrollToTop();
+        }, DispatcherPriority.ContextIdle);
     }
 
     void CloseEqualizer(object sender, RoutedEventArgs e) => EqualizerOverlay.Visibility = Visibility.Collapsed;

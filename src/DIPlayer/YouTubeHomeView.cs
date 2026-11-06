@@ -15,7 +15,7 @@ public partial class MainWindow
         if (!home) return;
 
         // These are actual recommendations from the current page, never invented history.
-        var picks = youtubeItems.Where(item => item.Kind == "Track" && !item.IsVideo)
+        var picks = youtubeItems.Where(item => item.Kind == "Track" && !item.IsVideo && !IsYouTubeRadio(item))
             .DistinctBy(item => item.Key).Take(2).ToArray();
         string signature = string.Join('\n', picks.Select(item => item.Key + item.Title + item.Subtitle + item.Artwork));
         if (signature != youtubeQuickPicksSignature)
@@ -32,7 +32,7 @@ public partial class MainWindow
         var scroll = grid.Children.OfType<ScrollViewer>().FirstOrDefault();
         if (scroll == null) return;
         double direction = button.Tag as string == "previous" ? -1 : 1;
-        scroll.ScrollToHorizontalOffset(scroll.HorizontalOffset + direction * Math.Max(204, scroll.ViewportWidth * .85));
+        UI.SmoothScroll.HorizontalBy(scroll, direction * Math.Max(204, scroll.ViewportWidth * .85));
     }
 
     void YouTubeQuickPicksSizeChanged(object sender, SizeChangedEventArgs e)
@@ -50,7 +50,7 @@ public partial class MainWindow
         double coverSize = Math.Max(120, Math.Min(280, Math.Min(e.NewSize.Height * .46, Math.Min(480, e.NewSize.Width * .4) - 74)));
         LyricsArtworkFrame.Width = LyricsArtworkFrame.Height = coverSize;
         LyricsVariantLabel.MaxWidth = compact ? 100 : 220;
-        foreach (var line in youtubeLyricBlocks) line.FontSize = compact ? 26 : 32;
+        UpdateTrackLyricTypography(e.NewSize.Width);
     }
 
     void YouTubeCollectionHeaderSizeChanged(object sender, SizeChangedEventArgs e)

@@ -14,16 +14,14 @@ public sealed class PlaybackFill : FrameworkElement
     public double Position { get => (double)GetValue(PositionProperty); set => SetValue(PositionProperty, value); }
     public double Duration { get => (double)GetValue(DurationProperty); set => SetValue(DurationProperty, value); }
     public double VisibleFraction => (double)GetValue(FractionProperty);
+    public double FilledWidth => Math.Clamp(9 + Math.Max(0, ActualWidth - 18) * VisibleFraction, 0, ActualWidth);
     static Brush CreateFill() { var brush = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)); brush.Freeze(); return brush; }
     static void Changed(DependencyObject target, DependencyPropertyChangedEventArgs e)
     {
         var view = (PlaybackFill)target;
         double fraction = double.IsFinite(view.Position) && double.IsFinite(view.Duration) && view.Duration > 0 ? Math.Clamp(view.Position / view.Duration, 0, 1) : 0;
-        double before = view.VisibleFraction;
         view.BeginAnimation(FractionProperty, null);
         view.SetValue(FractionProperty, fraction);
-        if (view.IsVisible && Motion.GetEnabled(view) && Math.Abs(fraction - before) < .035)
-            view.BeginAnimation(FractionProperty, new DoubleAnimation(before, fraction, TimeSpan.FromMilliseconds(240)) { FillBehavior = FillBehavior.Stop });
     }
-    protected override void OnRender(DrawingContext context) => context.DrawRectangle(fill, null, new Rect(0, 0, ActualWidth * VisibleFraction, ActualHeight));
+    protected override void OnRender(DrawingContext context) => context.DrawRectangle(fill, null, new Rect(0, 0, FilledWidth, ActualHeight));
 }
