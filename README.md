@@ -28,12 +28,23 @@ Large cover cards, personal recommendations, new releases, albums, Likes and que
 
 ### Made for listening
 
+The feature list below describes the current **main** branch. Downloadable releases may contain an earlier version. [Описание функций на русском](docs/features.ru.md).
+
 | | What you get |
 | :--- | :--- |
 | **Find & play** | SoundCloud and YouTube Music search, cover cards and precise seek/volume controls. |
 | **Your library** | SoundCloud account import with Likes, custom covers, table view and creation-date sorting. |
 | **Your queue** | Repeat, shuffle and clear the queue; YouTube queue access sits in the lower-right corner. |
 | **Stay compact** | A top-center mini player, tray playback and Windows media keys. |
+| **Watch clips** | Full-window music videos with playback controls, lyrics and a preference for 1080p when available. Public YouTube playback is used when the Music video switch is unavailable. |
+| **Follow the lyrics** | Synchronized lyrics, automatic scrolling, click-to-seek, manual reading, alternative lyric versions and separate timing adjustments for songs and clips. |
+| **Explore albums** | Shared album artwork for every track, an enlarged blurred cover background and a Video label when the catalog confirms a video or counterpart. |
+| **Shape the sound** | Six-band equalizer, presets, response curve and automatic headroom for boosted bands. |
+| **Find music faster** | Search suggestions, recent searches kept separately for SC and YT, artist pages and more results loaded as you scroll. |
+| **Make it yours** | Animated wallpaper, artwork quality, compact rows, startup volume and controls for motion, backdrop blur and track statistics. |
+| **Share your listening** | Optional Discord listening activity with artwork and playback information. |
+
+Lyrics depend on the available sources. A differently edited clip may show untimed words when the song's timestamps do not fit. The video quality badge reports the decoded resolution; 1080p depends on the source and playback conditions.
 
 <div align="center">
 <img src="docs/screenshots/mini-player.png" width="400" alt="DIPlayer mini player with artwork and playback controls">
