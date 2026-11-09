@@ -10,9 +10,9 @@
 
 A Windows music player built for gaming: native controls, separate service libraries and a compact mini player. Switch between SC and YT beside search.
 
-[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.4.0-alpha/DIPlayer-Setup-0.4.0-alpha-x64.exe) [![Version](https://img.shields.io/badge/RELEASE-0.4.0_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.4.0-alpha)
+[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.4.13-alpha/DIPlayer-win-x64.zip) [![Version](https://img.shields.io/badge/RELEASE-0.4.13_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.4.13-alpha)
 
-[Portable ZIP](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.4.0-alpha/DIPlayer-win-x64.zip) · [All releases](https://github.com/GeekyKrank/DIPlayer/releases) · [Report an issue](https://github.com/GeekyKrank/DIPlayer/issues)
+[All releases](https://github.com/GeekyKrank/DIPlayer/releases) · [Report an issue](https://github.com/GeekyKrank/DIPlayer/issues)
 
 </div>
 
@@ -73,11 +73,11 @@ Thorium had one SoundCloud tab open. Memory use varies with playback, workload a
 
 ### Get started
 
-1. **Install** using the EXE above, or extract the entire portable ZIP. No separate .NET installation needed.
+1. **Download** the ZIP above and extract the entire folder, then run `DIPlayer.exe`. No separate .NET installation needed.
 2. **Choose SC or YT.** Search for music; in SoundCloud mode, import playlists or sign in to copy playlists and Likes. YouTube mode uses its own Google account library.
 3. **Listen.** Press **—** for the mini player; double-click its title to return. Use **Quit** in the tray to exit.
 
-**Updating?** Quit DIPlayer, then run the new installer over the existing installation. Your playlists and covers stay saved.
+**Updating?** Quit DIPlayer, then extract the new ZIP over the existing folder. Your playlists and covers stay saved.
 
 ### A few things to know
 
