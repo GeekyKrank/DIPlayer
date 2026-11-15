@@ -10,7 +10,7 @@
 
 A Windows music player built for gaming: native controls, separate service libraries and a compact mini player. Switch between SC and YT beside search.
 
-[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.4.13-alpha/DIPlayer-win-x64.zip) [![Version](https://img.shields.io/badge/RELEASE-0.4.13_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.4.13-alpha)
+[![Download for Windows](https://img.shields.io/badge/DOWNLOAD-WINDOWS_x64-f59152?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/GeekyKrank/DIPlayer/releases/download/v0.5.0-alpha/DIPlayer-win-x64.zip) [![Version](https://img.shields.io/badge/RELEASE-0.5.0_ALPHA-252525?style=for-the-badge)](https://github.com/GeekyKrank/DIPlayer/releases/tag/v0.5.0-alpha)
 
 [All releases](https://github.com/GeekyKrank/DIPlayer/releases) · [Report an issue](https://github.com/GeekyKrank/DIPlayer/issues)
 
@@ -25,6 +25,18 @@ A Windows music player built for gaming: native controls, separate service libra
 ![DIPlayer YouTube Music mode](docs/screenshots/youtube-player.png)
 
 Large cover cards, personal recommendations, new releases, albums, Likes and queue — all in DIPlayer's interface. Albums open as collections; one-track singles play immediately. Sign in through Google, then return to the native player. The compact **SC / YT** switch changes service; each keeps its own library.
+
+### Frutiger Aero theme
+
+![DIPlayer Frutiger Aero theme](docs/screenshots/aero-player.webp)
+
+One click on the glossy leaf orb beside the **SC / YT** switch turns DIPlayer into a Frutiger Aero player: sky-and-grass backdrop, bright glass panels with water drops and sun flare, a two-card glass sidebar with colourful playlist covers, album and playlist headers with a glossy green play orb, a numbered track table and a full-width glass player with the progress bar under the controls. Click the orb again to return to the dark theme.
+
+The full-screen track view opens out of the player artwork and pours back into it with a macOS-style **genie** animation; the player recoils as it lands. The mini player follows the theme too:
+
+<div align="center">
+<img src="docs/screenshots/aero-mini-player.png" width="420" alt="DIPlayer mini player in the Frutiger Aero theme">
+</div>
 
 ### Made for listening
 
